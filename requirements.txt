@@ -1,0 +1,4 @@
+elasticsearch==7.0.5
+mft==0.4.1
+tqdm==4.36.1
+urllib3==1.25.6
