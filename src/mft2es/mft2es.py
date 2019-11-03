@@ -38,6 +38,13 @@ class Mft2es(object):
 
         for record in self.parser.entries_json():
             result = json.loads(record)
+
+            attributes = {}
+            for attribute in result.get('attributes'):
+                attributes[attribute.get('header').get('type_code')] = attribute
+
+            result['attributes'] = attributes
+
             buffer.append(result)
 
             if len(buffer) >= size:
