@@ -32,18 +32,24 @@ class Mft2es(object):
     def __init__(self, filepath: str) -> None:
         self.path = Path(filepath)
         self.parser = PyMftParser(self.path.open(mode='rb'))
+        self.csvparser = PyMftParser(self.path.open(mode='rb'))
 
     def gen_json(self, size: int) -> Generator:
         buffer: List[dict] = []
 
-        for record in self.parser.entries_json():
+        for record, csv in zip(self.parser.entries_json(), self.csvparser.entries_csv()):
+
             result = json.loads(record)
 
             attributes = {}
             for attribute in result.get('attributes'):
                 attributes[attribute.get('header').get('type_code')] = attribute
-
             result['attributes'] = attributes
+
+            # entries_json method does not include the information of full path... :(
+            if 'FileName' in result['attributes']:
+                filepath = csv.decode('utf-8').split(',')[-1].strip()
+                result['attributes']['FileName']['data']['path'] = filepath
 
             buffer.append(result)
 
