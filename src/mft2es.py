@@ -48,6 +48,26 @@ class Mft2es(object):
                 filepath = csv.decode("utf-8").split(",")[-1].strip()
                 result["attributes"]["FileName"]["data"]["path"] = filepath
 
+            for v in (
+                "DATA",
+                "BITMAP",
+            ):
+                for attribute in (
+                    "vnc_first",
+                    "vnc_last",
+                ):
+                    vnc = (
+                        result.get("attributes", dict())
+                        .get(v, dict())
+                        .get("header", dict())
+                        .get("residential_header", dict())
+                        .get(attribute)
+                    )
+                    if vnc:
+                        result["attributes"][v]["header"]["residential_header"][
+                            attribute
+                        ] = hex(vnc)
+
             buffer.append(result)
 
             if len(buffer) >= size:
