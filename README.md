@@ -1,10 +1,20 @@
 # Mft2es
 
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
+[![PyPI version](https://badge.fury.io/py/mft2es.svg)](https://badge.fury.io/py/mft2es)
+[![Python Versions](https://img.shields.io/pypi/pyversions/mft2es.svg)](https://pypi.org/project/mft2es/)
 
-Import Windows Master File Table(\$MFT) to ElasticSearch.
+Fast import of Windows Master File Table(\$MFT) into Elasticsearch.
 
 mft2es uses Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs).
+
+```
+Note:
+  2020.06.18
+
+  I've published to PyPI!
+  https://pypi.org/project/mft2es/
+```
 
 ## Usage
 
@@ -18,8 +28,31 @@ or
 from mft2es.mft2es import mft2es
 
 if __name__ == '__main__':
-    filepath = '/path/to/your/$MFT'
-    mft2es(filepath)
+  filepath = '/path/to/your/$MFT'
+  mft2es(filepath)
+```
+
+### Args
+
+mft2es supports multiple file input, all arguments are determined as file paths.
+
+```bash
+$ mft2es foo/MFT bar/MFT
+```
+
+or
+
+```bash
+$ tree .
+mftfiles/
+  ├── MFT
+  └── subdirectory/
+    ├── MFT
+    └── subsubdirectory/
+      ├── MFT
+      └── $MFT
+
+$ mft2es /mftfiles/ # The Path is recursively expanded to all MFT, and $MFT.
 ```
 
 ### Options
@@ -40,6 +73,10 @@ if __name__ == '__main__':
 --size:
   bulk insert size
   (default: 500)
+
+--scheme:
+  Scheme to use (http, or https)
+  (default: http)
 ```
 
 ### Examples
@@ -50,8 +87,30 @@ $ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foo --size=500
 
 ```py
 if __name__ == '__main__':
-    mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foo', size=500)
+  mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foo', size=500)
 ```
+
+## Extra
+
+### Mft2json
+
+Extra feature. :sushi: :sushi: :sushi:
+
+Convert from Windows MFT to json file.
+
+```bash
+$ mft2json /path/to/your/MFT /path/to/output/target.json
+```
+
+or
+
+````python
+from mft2es import mft2json
+
+if __name__ == '__main__':
+  filepath = '/path/to/your/MFT'
+  result: List[dict] = mft2json(filepath)
+
 
 ## Output Format
 
@@ -194,14 +253,14 @@ The structures is not well optimized for searchable with Elasticsearch. I'm wait
   }
   ...
 ]
-```
+````
 
 ## Installation
 
 ### via pip
 
 ```
-$ pip install git+https://github.com/sumeshi/mft2es
+$ pip install mft2es
 ```
 
 The source code for mft2es is hosted at GitHub, and you may download, fork, and review it from this repository(https://github.com/sumeshi/mft2es).

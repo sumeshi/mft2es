@@ -169,6 +169,7 @@ def console_mft2es():
     mftfiles = list()
     for mftfile in args.mftfiles:
         if mftfile.is_dir():
+            mftfiles.extend(mftfile.glob("**/mft"))
             mftfiles.extend(mftfile.glob("**/MFT"))
             mftfiles.extend(mftfile.glob("**/$MFT"))
         else:
