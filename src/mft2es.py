@@ -150,7 +150,6 @@ def console_mft2es():
 
     # Args
     parser = argparse.ArgumentParser()
-    parser.add_argument("mftfile", help="Windows MFT file")
     parser.add_argument(
         "mftfiles",
         nargs="+",
@@ -179,7 +178,7 @@ def console_mft2es():
     for mftfile in mftfiles:
         print(f"Currently Importing {mftfile}")
         mft2es(
-            filepath=args.mftfile,
+            filepath=mftfile,
             host=args.host,
             port=int(args.port),
             index=args.index,
@@ -187,6 +186,8 @@ def console_mft2es():
             scheme=args.scheme,
         )
         print()
+
+    print("Import completed.")
 
 
 def console_mft2json():
