@@ -1,6 +1,5 @@
 # coding: utf-8
 import json
-import codecs
 import argparse
 import traceback
 
@@ -80,7 +79,7 @@ def mft2es(
             traceback.print_exc()
 
 
-def main():
+def console_mft2es():
     parser = argparse.ArgumentParser()
     parser.add_argument("mftfile", help="Windows Master File Table")
     parser.add_argument(
@@ -103,4 +102,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    console_mft2es()
