@@ -1,11 +1,13 @@
 # Mft2es
+
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
 
-Import Windows Master File Table($MFT) to ElasticSearch.
+Import Windows Master File Table(\$MFT) to ElasticSearch.
 
 mft2es uses Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs).
 
 ## Usage
+
 ```bash
 $ mft2es /path/to/your/$MFT
 ```
@@ -21,36 +23,34 @@ if __name__ == '__main__':
 ```
 
 ### Options
+
 ```
---host: 
-    ElasticSearch host address
-    (default: localhost)
+--host:
+  ElasticSearch host address
+  (default: localhost)
 
---port: 
-    ElasticSearch port number
-    (default: 9200)
+--port:
+  ElasticSearch port number
+  (default: 9200)
 
---index: 
-    Index name
-    (default: mft2es)
-
---type: 
-    Document-type name
-    (default: mft2es)
+--index:
+  Index name
+  (default: mft2es)
 
 --size:
-    bulk insert size
-    (default: 500)
+  bulk insert size
+  (default: 500)
 ```
 
 ### Examples
+
 ```
-$ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foo --type=bar --size=500
+$ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foo --size=500
 ```
 
 ```py
 if __name__ == '__main__':
-    mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foo', type='bar', size=500)
+    mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foo', size=500)
 ```
 
 ## Output Format
@@ -153,7 +153,7 @@ The structures is not well optimized for searchable with Elasticsearch. I'm wait
           "form_code": 1,
           "residential_header": {
             "vnc_first": 0,
-            "vnc_last": 15231,
+            "vnc_last": "0x198f",
             "unit_compression_size": 0,
             "allocated_length": 62390272,
             "file_size": 62390272,
@@ -175,7 +175,7 @@ The structures is not well optimized for searchable with Elasticsearch. I'm wait
           "form_code": 1,
           "residential_header": {
             "vnc_first": 0,
-            "vnc_last": 2,
+            "vnc_last": 0,
             "unit_compression_size": 0,
             "allocated_length": 12288,
             "file_size": 8200,
@@ -197,7 +197,9 @@ The structures is not well optimized for searchable with Elasticsearch. I'm wait
 ```
 
 ## Installation
+
 ### via pip
+
 ```
 $ pip install git+https://github.com/sumeshi/mft2es
 ```
@@ -207,6 +209,7 @@ The source code for mft2es is hosted at GitHub, and you may download, fork, and 
 Please report issues and feature requests. :sushi: :sushi: :sushi:
 
 ## License
+
 mft2es is released under the [MIT](https://github.com/sumeshi/mft2es/blob/master/LICENSE) License.
 
-Powered by [pymft-rs](https://github.com/omerbenamram/pymft-rs).  
+Powered by [pymft-rs](https://github.com/omerbenamram/pymft-rs).

@@ -17,13 +17,9 @@ class ElasticsearchUtils(object):
     def __init__(self, hostname: str, port: int) -> None:
         self.es = Elasticsearch(host=hostname, port=port)
 
-    def bulk_indice(self, records, index_name: str, type_name: str) -> None:
+    def bulk_indice(self, records, index_name: str) -> None:
         bulk(
-            self.es,
-            [
-                {"_index": index_name, "_type": type_name, "_source": record}
-                for record in records
-            ],
+            self.es, [{"_index": index_name, "_source": record} for record in records],
         )
 
 
@@ -66,7 +62,6 @@ def mft2es(
     host: str = "localhost",
     port: int = 9200,
     index: str = "mft2es",
-    type: str = "mft2es",
     size: int = 500,
 ):
     es = ElasticsearchUtils(hostname=host, port=port)
@@ -74,7 +69,7 @@ def mft2es(
 
     for records in tqdm(r.gen_json(size)):
         try:
-            es.bulk_indice(records, index, type)
+            es.bulk_indice(records, index)
         except Exception:
             traceback.print_exc()
 
@@ -87,7 +82,6 @@ def console_mft2es():
     )
     parser.add_argument("--port", default=9200, help="ElasticSearch port number")
     parser.add_argument("--index", default="mft2es", help="Index name")
-    parser.add_argument("--type", default="mft2es", help="Document type name")
     parser.add_argument("--size", default=500, help="Bulk insert buffer size")
     args = parser.parse_args()
 
@@ -96,7 +90,6 @@ def console_mft2es():
         host=args.host,
         port=int(args.port),
         index=args.index,
-        type=args.type,
         size=int(args.size),
     )
 
