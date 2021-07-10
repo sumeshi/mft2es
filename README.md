@@ -300,12 +300,12 @@ https://hub.docker.com/r/sumeshi/mft2es
 ```bash
 # "host.docker.internal" is only available in mac and windows environments.
 # For linux, use the --add-host option.
-$ docker run -t --rm -v $(pwd):/app sumeshi/mft2es:latest mft2es \$MFT --host=host.docker.internal
+$ docker run -t --rm -v $(pwd):/app/work sumeshi/mft2es:latest mft2es /app/work/\$MFT --host=host.docker.internal
 ```
 
 ## mft2json
 ```bash
-$ docker run -t --rm -v $(pwd):/app sumeshi/mft2es:latest mft2es \$MFT out.json
+$ docker run -t --rm -v $(pwd):/app/work sumeshi/mft2es:latest mft2es /app/work/\$MFT /app/work/out.json
 ```
 
 Do not use the "latest" image if at all possible.  
@@ -313,7 +313,7 @@ The "latest" image is not a released version, but is built from the contents of 
 
 ## Contributing
 
-[CONTRIBUTING](https://github.com/sumeshi/mft2es/blob/master/CONTRIBUTING)
+[CONTRIBUTING](https://github.com/sumeshi/mft2es/blob/master/CONTRIBUTING.md)
 
 The source code for mft2es is hosted at GitHub, and you may download, fork, and review it from this repository(https://github.com/sumeshi/mft2es).
 Please report issues and feature requests. :sushi: :sushi: :sushi:
