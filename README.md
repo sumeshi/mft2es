@@ -11,14 +11,6 @@ Fast import of Windows Master File Table(\$MFT) into Elasticsearch.
 
 mft2es uses Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs).
 
-```
-Note:
-  2020.06.18
-
-  I've published to PyPI!
-  https://pypi.org/project/mft2es/
-```
-
 ## Usage
 
 ```bash
