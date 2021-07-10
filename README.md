@@ -3,6 +3,9 @@
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
 [![PyPI version](https://badge.fury.io/py/mft2es.svg)](https://badge.fury.io/py/mft2es)
 [![Python Versions](https://img.shields.io/pypi/pyversions/mft2es.svg)](https://pypi.org/project/mft2es/)
+[![DockerHub Status](https://shields.io/docker/cloud/build/sumeshi/mft2es)](https://hub.docker.com/r/sumeshi/mft2es)
+
+![mft2es logo](https://gist.githubusercontent.com/sumeshi/c2f430d352ae763273faadf9616a29e5/raw/681a72cc27829497283409e19a78808c1297c2db/mft2es.svg)
 
 Fast import of Windows Master File Table(\$MFT) into Elasticsearch.
 
@@ -77,20 +80,50 @@ $ mft2es /mftfiles/ # The Path is recursively expanded to all MFT, and $MFT.
 --scheme:
   Scheme to use (http, or https)
   (default: http)
+
+--pipeline
+  Elasticsearch Ingest Pipeline to use
+  (default: )
+
+--login:
+  The login to use if Elastic Security is enable
+  (default: )
+
+--pwd:
+  The password linked to the login provided
+  (default: )
 ```
 
 ### Examples
 
+When using from the commandline interface:
+
 ```
-$ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foo --size=500
+$ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foobar --size=500
 ```
+
+When using from the python-script:
 
 ```py
 if __name__ == '__main__':
-  mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foo', size=500)
+    mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foobar', size=500)
 ```
 
-## Extra
+With the Amazon Elasticsearch Serivce (ES):
+
+```
+$ mft2es /path/to/your/$MFT --host=example.us-east-1.es.amazonaws.com --port=443 --scheme=https --index=foobar
+```
+
+With credentials for Elastic Security:
+
+```
+$ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foobar --login=elastic --pwd=******
+```
+
+Note: The current version does not verify the certificate.
+
+## Appendix
 
 ### Mft2json
 
@@ -99,7 +132,7 @@ Extra feature. :sushi: :sushi: :sushi:
 Convert from Windows MFT to json file.
 
 ```bash
-$ mft2json /path/to/your/MFT /path/to/output/target.json
+$ mft2json /path/to/your/$MFT /path/to/output/target.json
 ```
 
 or
@@ -108,7 +141,7 @@ or
 from mft2es import mft2json
 
 if __name__ == '__main__':
-  filepath = '/path/to/your/MFT'
+  filepath = '/path/to/your/$MFT'
   result: List[dict] = mft2json(filepath)
 
 
@@ -257,14 +290,40 @@ The structures is not well optimized for searchable with Elasticsearch. I'm wait
 
 ## Installation
 
-### via pip
-
+### via PyPI
 ```
 $ pip install mft2es
 ```
 
-The source code for mft2es is hosted at GitHub, and you may download, fork, and review it from this repository(https://github.com/sumeshi/mft2es).
+### via DockerHub
+```
+$ docker pull sumeshi/mft2es:latest
+```
 
+## Run with Docker
+https://hub.docker.com/r/sumeshi/mft2es
+
+
+## mft2es
+```bash
+# "host.docker.internal" is only available in mac and windows environments.
+# For linux, use the --add-host option.
+$ docker run -t --rm -v $(pwd):/app sumeshi/mft2es:latest mft2es \$MFT --host=host.docker.internal
+```
+
+## mft2json
+```bash
+$ docker run -t --rm -v $(pwd):/app sumeshi/mft2es:latest mft2es \$MFT out.json
+```
+
+Do not use the "latest" image if at all possible.  
+The "latest" image is not a released version, but is built from the contents of the master branch.
+
+## Contributing
+
+[CONTRIBUTING](https://github.com/sumeshi/mft2es/blob/master/CONTRIBUTING)
+
+The source code for mft2es is hosted at GitHub, and you may download, fork, and review it from this repository(https://github.com/sumeshi/mft2es).
 Please report issues and feature requests. :sushi: :sushi: :sushi:
 
 ## License
