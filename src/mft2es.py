@@ -1,5 +1,6 @@
+#!/usr/bin/env python3
 # coding: utf-8
-import json
+
 import argparse
 import traceback
 from hashlib import sha1
@@ -9,13 +10,17 @@ from typing import List, Generator
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
+import orjson
 from mft import PyMftParser
 from tqdm import tqdm
 
 
 class ElasticsearchUtils(object):
-    def __init__(self, hostname: str, port: int, scheme: str) -> None:
-        self.es = Elasticsearch(host=hostname, port=port, scheme=scheme)
+    def __init__(self, hostname: str, port: int, scheme: str, login: str, pwd: str) -> None:
+        if login == "":
+            self.es = Elasticsearch(host=hostname, port=port, scheme=scheme, verify_certs=False)
+        else:
+            self.es = Elasticsearch(host=hostname, port=port, scheme=scheme, verify_certs=False, http_auth=(login, pwd))
 
     def calc_hash(self, record: dict) -> str:
         """Calculate hash value from record.
@@ -24,23 +29,22 @@ class ElasticsearchUtils(object):
         Returns:
             str: Hash value
         """
-        return sha1(json.dumps(record, sort_keys=True).encode()).hexdigest()
+        return sha1(orjson.dumps(record, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
-    def bulk_indice(self, records, index_name: str) -> None:
+    def bulk_indice(self, records, index_name: str, pipeline: str) -> None:
         """Bulk indices the documents into Elasticsearch.
         Args:
             records (List[dict]): List of each records read from MFT files.
             index_name (str): Target Elasticsearch Index.
+            pipeline (str): Target Elasticsearch Ingest Pipeline
         """
-
-        bulk(
-            self.es,
-            [
-                {"_id": self.calc_hash(record), "_index": index_name, "_source": record}
-                for record in records
-            ],
-            raise_on_error=False,
-        )
+        events = []
+        for record in records:
+            event = {"_id": self.calc_hash(record), "_index": index_name, "_source": record}
+            if pipeline != "":
+                event["pipeline"] = pipeline
+            events.append(event)
+        bulk(self.es, events, raise_on_error=False)
 
 
 class Mft2es(object):
@@ -63,7 +67,7 @@ class Mft2es(object):
             self.parser.entries_json(), self.csvparser.entries_csv()
         ):
 
-            result = json.loads(record)
+            result = orjson.loads(record)
 
             attributes = {}
             for attribute in result.get("attributes"):
@@ -111,33 +115,59 @@ def mft2es(
     index: str = "mft2es",
     size: int = 500,
     scheme: str = "http",
+    pipeline: str = "",
+    login: str = "",
+    pwd: str = ""
 ):
     """Fast import of Windows MFT into Elasticsearch.
     Args:
         filepath (str):
             Windows MFTs to import into Elasticsearch.
+
         host (str, optional):
             Elasticsearch host address. Defaults to "localhost".
+
         port (int, optional):
             Elasticsearch port number. Defaults to 9200.
+
         index (str, optional):
             Name of the index to create. Defaults to "mft2es".
+
         size (int, optional):
             Buffer size for BulkIndice at a time. Defaults to 500.
+
         scheme (str, optional):
             Elasticsearch address scheme. Defaults to "http".
+
+        pipeline (str, optional):
+            Elasticsearch Ingest Pipeline. Defaults to "".
+
+        login (str, optional):
+            Elasticsearch login to connect into.
+
+        pwd (str, optional):
+            Elasticsearch password associated with the login provided.
     """
-    es = ElasticsearchUtils(hostname=host, port=port, scheme=scheme)
+    es = ElasticsearchUtils(hostname=host, port=port, scheme=scheme, login=login, pwd=pwd)
     r = Mft2es(filepath)
 
     for records in tqdm(r.gen_records(size)):
         try:
-            es.bulk_indice(records, index)
+            es.bulk_indice(records, index, pipeline)
         except Exception:
             traceback.print_exc()
 
 
 def mft2json(filepath: str) -> List[dict]:
+    """Convert mft to json.
+
+    Args:
+        filepath (str): Input MFT file.
+
+    Note:
+        Since the content of the file is loaded into memory at once,
+        it requires the same amount of memory as the file to be loaded.
+    """
     r = Mft2es(filepath)
 
     buffer: List[dict] = sum(list(tqdm(r.gen_records(500))), list())
@@ -163,6 +193,9 @@ def console_mft2es():
     parser.add_argument("--index", default="mft2es", help="Index name")
     parser.add_argument("--size", default=500, help="Bulk insert buffer size")
     parser.add_argument("--scheme", default="http", help="Scheme to use (http, https)")
+    parser.add_argument("--pipeline", default="", help="Ingest pipeline to use")
+    parser.add_argument("--login", default="", help="Login to use to connect to Elastic database")
+    parser.add_argument("--pwd", default="", help="Password associated with the login")
     args = parser.parse_args()
 
     # Target files
@@ -185,6 +218,9 @@ def console_mft2es():
             index=args.index,
             size=int(args.size),
             scheme=args.scheme,
+            pipeline=args.pipeline,
+            login=args.login,
+            pwd=args.pwd
         )
         print()
 
@@ -204,7 +240,7 @@ def console_mft2json():
     # Convert mft to json file.
     print(f"Converting {args.mftfile}")
     o = Path(args.jsonfile)
-    o.write_text(json.dumps(mft2json(filepath=args.mftfile), indent=2))
+    o.write_text(orjson.dumps(mft2json(filepath=args.mftfile), option=orjson.OPT_INDENT_2).decode("utf-8"))
     print()
 
     print("Convert completed.")
