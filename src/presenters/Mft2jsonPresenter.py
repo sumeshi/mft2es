@@ -18,15 +18,6 @@ class Mft2jsonPresenter(object):
         self.chunk_size = chunk_size
 
     def mft2json(self) -> List[dict]:
-        """Convert mft to json.
-
-        Args:
-            filepath (str): Input MFT file.
-
-        Note:
-            Since the content of the file is loaded into memory at once,
-            it requires the same amount of memory as the file to be loaded.
-        """
         r = Mft2es(self.input_path)
         generator = r.gen_records(self.multiprocess, self.chunk_size) if self.is_quiet else tqdm(r.gen_records(self.multiprocess, self.chunk_size))
 
