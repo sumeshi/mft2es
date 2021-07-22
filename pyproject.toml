@@ -12,8 +12,8 @@ homepage = "https://github.com/sumeshi/mft2es"
 keywords = ['mft', 'elasticsearch', 'json']
 
 [tool.poetry.scripts]
-mft2es = 'mft2es:console_mft2es'
-mft2json = 'mft2es:console_mft2json'
+mft2es = 'views.Mft2esView:entry_point'
+mft2json = 'views.Mft2jsonView:entry_point'
 
 [tool.poetry.dependencies]
 python = "^3.7"
