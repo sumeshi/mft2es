@@ -24,7 +24,6 @@ class Mft2esView(BaseView):
         self.parser.add_argument("--host", default="localhost", help="ElasticSearch host")
         self.parser.add_argument("--port", default=9200, help="ElasticSearch port number")
         self.parser.add_argument("--index", default="mft2es", help="Index name")
-        self.parser.add_argument("--size", default=500, help="Bulk insert buffer size")
         self.parser.add_argument("--scheme", default="http", help="Scheme to use (http, https)")
         self.parser.add_argument("--pipeline", default="", help="Ingest pipeline to use")
         self.parser.add_argument("--login", default="", help="Login to use to connect to Elastic database")
@@ -54,14 +53,13 @@ class Mft2esView(BaseView):
                 host=self.args.host,
                 port=int(self.args.port),
                 index=self.args.index,
-                size=int(self.args.size),
                 scheme=self.args.scheme,
                 pipeline=self.args.pipeline,
                 login=self.args.login,
                 pwd=self.args.pwd,
                 is_quiet=self.args.quiet,
                 multiprocess=self.args.multiprocess,
-                chunk_size=int(self.args.chunk_size),
+                chunk_size=int(self.args.size),
             ).bulk_import()
 
         view.log("Import completed.", self.args.quiet)

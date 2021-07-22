@@ -18,7 +18,6 @@ class Mft2esPresenter(object):
         host: str = "localhost",
         port: int = 9200,
         index: str = "mft2es",
-        size: int = 500,
         scheme: str = "http",
         pipeline: str = "",
         login: str = "",
@@ -31,7 +30,6 @@ class Mft2esPresenter(object):
         self.host = host
         self.port = port
         self.index = index
-        self.size = size
         self.scheme = scheme
         self.pipeline = pipeline
         self.login = login

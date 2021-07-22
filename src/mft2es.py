@@ -12,7 +12,6 @@ def mft2es(
     host: str = "localhost",
     port: int = 9200,
     index: str = "mft2es",
-    size: int = 500,
     scheme: str = "http",
     pipeline: str = "",
     login: str = "",
@@ -33,9 +32,6 @@ def mft2es(
 
         index (str, optional):
             Name of the index to create. Defaults to "mft2es".
-
-        size (int, optional):
-            Buffer size for BulkIndice at a time. Defaults to 500.
 
         scheme (str, optional):
             Elasticsearch address scheme. Defaults to "http".
@@ -61,7 +57,6 @@ def mft2es(
         host=host,
         port=int(port),
         index=index,
-        size=int(size),
         scheme=scheme,
         pipeline=pipeline,
         login=login,
