@@ -24,7 +24,7 @@ class Mft2jsonView(BaseView):
             output_path=self.args.output_file,
             is_quiet=self.args.quiet,
             multiprocess=self.args.multiprocess,
-            size=self.args.size,
+            chunk_size=self.args.chunk_size,
         ).export_json()
 
         view.log("Converted.", self.args.quiet)

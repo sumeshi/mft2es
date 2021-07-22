@@ -8,21 +8,21 @@ import orjson
 from mft import PyMftParser
 
 
-def generate_chunks(size: int, iterable: Iterable) -> Generator:
+def generate_chunks(chunk_size: int, iterable: Iterable) -> Generator:
     """Generate arbitrarily sized chunks from iterable objects.
 
     Args:
-        size (int): Chunk sizes.
+        chunk_size (int): Chunk sizes.
         iterable (Iterable): Original Iterable object.
 
     Yields:
         Generator: List
     """
     i = iter(iterable)
-    piece = list(islice(i, size))
+    piece = list(islice(i, chunk_size))
     while piece:
         yield piece
-        piece = list(islice(i, size))
+        piece = list(islice(i, chunk_size))
 
 
 def format_record(record: dict, filepath: str):
@@ -98,22 +98,22 @@ class Mft2es(object):
         self.parser = PyMftParser(self.path.open(mode="rb"))
         self.csvparser = PyMftParser(self.path.open(mode="rb"))
 
-    def gen_records(self, multiprocess: bool, size: int) -> Generator:
+    def gen_records(self, multiprocess: bool, chunk_size: int) -> Generator:
         """Generates the formatted MFT records chunks.
 
         Args:
             multiprocess (bool): Flag to run multiprocessing.
-            size (int): Size of the chunk to be processed for each process.
+            chunk_size (int): Size of the chunk to be processed for each process.
 
         Yields:
             Generator: Yields List[dict].
         """
         if multiprocess:
             with Pool(cpu_count()) as pool:
-                results = pool.starmap_async(process_by_chunk, zip(generate_chunks(size, self.parser.entries_json()), generate_chunks(size, self.csvparser.entries_csv())))
+                results = pool.starmap_async(process_by_chunk, zip(generate_chunks(chunk_size, self.parser.entries_json()), generate_chunks(chunk_size, self.csvparser.entries_csv())))
                 yield results.get(timeout=None)
         else:
             for json, csv in zip(
-                generate_chunks(size, self.parser.entries_json()), generate_chunks(size, self.csvparser.entries_csv())
+                generate_chunks(chunk_size, self.parser.entries_json()), generate_chunks(chunk_size, self.csvparser.entries_csv())
             ):
                 yield process_by_chunk(json, csv)
