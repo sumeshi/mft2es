@@ -1,16 +1,25 @@
 # coding: utf-8
+from typing import List
+from pathlib import Path
 
-# def mft2json(filepath: str) -> List[dict]:
-#     """Convert mft to json.
-# 
-#     Args:
-#         filepath (str): Input MFT file.
-# 
-#     Note:
-#         Since the content of the file is loaded into memory at once,
-#         it requires the same amount of memory as the file to be loaded.
-#     """
-#     r = Mft2es(filepath)
-# 
-#     buffer: List[dict] = sum(list(tqdm(r.gen_records(500))), list())
-#     return buffer
+from models.Mft2es import Mft2es
+
+
+# for use via python-script!
+
+def mft2json(filepath: str, multiprocess: bool = False, size: int = 500) -> List[dict]:
+    """Convert Windows MFT to List[dict].
+
+    Args:
+        filepath (str): Input MFT file.
+        multiprocess (bool): Flag to run multiprocessing.
+        size (int): Size of the chunk to be processed for each process.
+
+    Note:
+        Since the content of the file is loaded into memory at once,
+        it requires the same amount of memory as the file to be loaded.
+    """
+    mft = Mft2es(Path(filepath).resolve())
+    records: List[dict] = sum(list(mft.gen_records(multiprocess=multiprocess, size=size)), list())
+
+    return records
