@@ -1,25 +1,14 @@
-#!/usr/bin/env python3
 # coding: utf-8
-
-import argparse
-import traceback
-from hashlib import sha1
+from typing import List
 from pathlib import Path
-from typing import List, Generator
 
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
-
-import orjson
-from tqdm import tqdm
+from presenters.Mft2esPresenter import Mft2esPresenter
 
 
-
-
-
+# for use via python-script!
 
 def mft2es(
-    filepath: str,
+    input_path: str,
     host: str = "localhost",
     port: int = 9200,
     index: str = "mft2es",
@@ -27,11 +16,13 @@ def mft2es(
     scheme: str = "http",
     pipeline: str = "",
     login: str = "",
-    pwd: str = ""
-):
+    pwd: str = "",
+    multiprocess: bool = False,
+    chunk_size: int = 500
+) -> None:
     """Fast import of Windows MFT into Elasticsearch.
     Args:
-        filepath (str):
+        input_path (str):
             Windows MFTs to import into Elasticsearch.
 
         host (str, optional):
@@ -57,73 +48,25 @@ def mft2es(
 
         pwd (str, optional):
             Elasticsearch password associated with the login provided.
-    """
-    es = ElasticsearchUtils(hostname=host, port=port, scheme=scheme, login=login, pwd=pwd)
-    r = Mft2es(filepath)
 
-    for records in tqdm(r.gen_records(size)):
-        try:
-            es.bulk_indice(records, index, pipeline)
-        except Exception:
-            traceback.print_exc()
+        multiprocess (bool, optional):
+            Flag to run multiprocessing.
 
-
-
-
-
-
-def console_mft2es():
-    """ This function is loaded when used from the console.
+        chunk_size (int, optional):
+            Size of the chunk to be processed for each process.
     """
 
-    # Args
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "mftfiles",
-        nargs="+",
-        type=Path,
-        help="Windows MFT or directories containing them. (filename must be set 'MFT', or '$MFT')",
-    )
-
-    # Options
-    parser.add_argument("--host", default="localhost", help="ElasticSearch host")
-    parser.add_argument("--port", default=9200, help="ElasticSearch port number")
-    parser.add_argument("--index", default="mft2es", help="Index name")
-    parser.add_argument("--size", default=500, help="Bulk insert buffer size")
-    parser.add_argument("--scheme", default="http", help="Scheme to use (http, https)")
-    parser.add_argument("--pipeline", default="", help="Ingest pipeline to use")
-    parser.add_argument("--login", default="", help="Login to use to connect to Elastic database")
-    parser.add_argument("--pwd", default="", help="Password associated with the login")
-    args = parser.parse_args()
-
-    # Target files
-    mftfiles = list()
-    for mftfile in args.mftfiles:
-        if mftfile.is_dir():
-            mftfiles.extend(mftfile.glob("**/mft"))
-            mftfiles.extend(mftfile.glob("**/MFT"))
-            mftfiles.extend(mftfile.glob("**/$MFT"))
-        else:
-            mftfiles.append(mftfile)
-
-    # Indexing MFT files
-    for mftfile in mftfiles:
-        print(f"Currently Importing {mftfile}")
-        mft2es(
-            filepath=mftfile,
-            host=args.host,
-            port=int(args.port),
-            index=args.index,
-            size=int(args.size),
-            scheme=args.scheme,
-            pipeline=args.pipeline,
-            login=args.login,
-            pwd=args.pwd
-        )
-        print()
-
-    print("Import completed.")
-
-
-if __name__ == "__main__":
-    console_mft2es()
+    mp = Mft2esPresenter(
+        input_path=Path(input_path),
+        host=host,
+        port=int(port),
+        index=index,
+        size=int(size),
+        scheme=scheme,
+        pipeline=pipeline,
+        login=login,
+        pwd=pwd,
+        is_quiet=True,
+        multiprocess=multiprocess,
+        chunk_size=int(chunk_size),
+    ).bulk_import()

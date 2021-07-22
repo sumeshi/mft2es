@@ -10,7 +10,14 @@ from models.Mft2es import Mft2es
 
 class Mft2jsonPresenter(object):
 
-    def __init__(self, input_path: str, output_path: str, is_quiet: bool, multiprocess: bool, chunk_size: int):
+    def __init__(
+        self,
+        input_path: str,
+        output_path: str,
+        is_quiet: bool = False,
+        multiprocess: bool = False,
+        chunk_size: int = 500
+    ):
         self.input_path = Path(input_path).resolve()
         self.output_path = output_path if output_path else Path(self.input_path).with_suffix('.json')
         self.is_quiet = is_quiet

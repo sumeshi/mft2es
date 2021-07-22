@@ -113,7 +113,14 @@ class Mft2es(object):
                 results = pool.starmap_async(process_by_chunk, zip(generate_chunks(chunk_size, self.parser.entries_json()), generate_chunks(chunk_size, self.csvparser.entries_csv())))
                 yield results.get(timeout=None)
         else:
+            buffer: List[dict] = list()
             for json, csv in zip(
                 generate_chunks(chunk_size, self.parser.entries_json()), generate_chunks(chunk_size, self.csvparser.entries_csv())
             ):
-                yield process_by_chunk(json, csv)
+                if chunk_size <= len(buffer):
+                    yield buffer
+                    buffer.clear()
+                else:
+                    buffer.append(process_by_chunk(json, csv))
+            else:
+                yield buffer
