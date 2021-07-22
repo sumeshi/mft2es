@@ -11,101 +11,11 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
 import orjson
-from mft import PyMftParser
 from tqdm import tqdm
 
 
-class ElasticsearchUtils(object):
-    def __init__(self, hostname: str, port: int, scheme: str, login: str, pwd: str) -> None:
-        if login == "":
-            self.es = Elasticsearch(host=hostname, port=port, scheme=scheme, verify_certs=False)
-        else:
-            self.es = Elasticsearch(host=hostname, port=port, scheme=scheme, verify_certs=False, http_auth=(login, pwd))
-
-    def calc_hash(self, record: dict) -> str:
-        """Calculate hash value from record.
-        Args:
-            record (dict): MFT record.
-        Returns:
-            str: Hash value
-        """
-        return sha1(orjson.dumps(record, option=orjson.OPT_SORT_KEYS)).hexdigest()
-
-    def bulk_indice(self, records, index_name: str, pipeline: str) -> None:
-        """Bulk indices the documents into Elasticsearch.
-        Args:
-            records (List[dict]): List of each records read from MFT files.
-            index_name (str): Target Elasticsearch Index.
-            pipeline (str): Target Elasticsearch Ingest Pipeline
-        """
-        events = []
-        for record in records:
-            event = {"_id": self.calc_hash(record), "_index": index_name, "_source": record}
-            if pipeline != "":
-                event["pipeline"] = pipeline
-            events.append(event)
-        bulk(self.es, events, raise_on_error=False)
 
 
-class Mft2es(object):
-    def __init__(self, filepath: str) -> None:
-        self.path = Path(filepath)
-        self.parser = PyMftParser(self.path.open(mode="rb"))
-        self.csvparser = PyMftParser(self.path.open(mode="rb"))
-
-    def gen_records(self, size: int) -> Generator:
-        """A generator that reads records from an MFT file and generates a dict for each record.
-        Args:
-            size (int): Buffer size.
-        Yields:
-            Generator: Yields List[dict].
-        """
-
-        buffer: List[dict] = []
-
-        for record, csv in zip(
-            self.parser.entries_json(), self.csvparser.entries_csv()
-        ):
-
-            result = orjson.loads(record)
-
-            attributes = {}
-            for attribute in result.get("attributes"):
-                attributes[attribute.get("header").get("type_code")] = attribute
-            result["attributes"] = attributes
-
-            # entries_json method does not include the information of full path... :(
-            if "FileName" in result["attributes"]:
-                filepath = csv.decode("utf-8").split(",")[-1].strip()
-                result["attributes"]["FileName"]["data"]["path"] = filepath
-
-            for v in (
-                "DATA",
-                "BITMAP",
-            ):
-                for attribute in (
-                    "vnc_first",
-                    "vnc_last",
-                ):
-                    vnc = (
-                        result.get("attributes", dict())
-                        .get(v, dict())
-                        .get("header", dict())
-                        .get("residential_header", dict())
-                        .get(attribute)
-                    )
-                    if vnc:
-                        result["attributes"][v]["header"]["residential_header"][
-                            attribute
-                        ] = hex(vnc)
-
-            buffer.append(result)
-
-            if len(buffer) >= size:
-                yield buffer
-                buffer.clear()
-        else:
-            yield buffer
 
 
 def mft2es(
@@ -158,20 +68,8 @@ def mft2es(
             traceback.print_exc()
 
 
-def mft2json(filepath: str) -> List[dict]:
-    """Convert mft to json.
 
-    Args:
-        filepath (str): Input MFT file.
 
-    Note:
-        Since the content of the file is loaded into memory at once,
-        it requires the same amount of memory as the file to be loaded.
-    """
-    r = Mft2es(filepath)
-
-    buffer: List[dict] = sum(list(tqdm(r.gen_records(500))), list())
-    return buffer
 
 
 def console_mft2es():
@@ -225,25 +123,6 @@ def console_mft2es():
         print()
 
     print("Import completed.")
-
-
-def console_mft2json():
-    """ This function is loaded when used from the console.
-    """
-
-    # Args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("mftfile", type=Path, help="Windows MFT file")
-    parser.add_argument("jsonfile", type=Path, help="Output json file path")
-    args = parser.parse_args()
-
-    # Convert mft to json file.
-    print(f"Converting {args.mftfile}")
-    o = Path(args.jsonfile)
-    o.write_text(orjson.dumps(mft2json(filepath=args.mftfile), option=orjson.OPT_INDENT_2).decode("utf-8"))
-    print()
-
-    print("Convert completed.")
 
 
 if __name__ == "__main__":
