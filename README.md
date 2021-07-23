@@ -20,7 +20,7 @@ $ mft2es /path/to/your/$MFT
 or
 
 ```python
-from mft2es.mft2es import mft2es
+from mft2es import mft2es
 
 if __name__ == '__main__':
   filepath = '/path/to/your/$MFT'
@@ -53,6 +53,22 @@ $ mft2es /mftfiles/ # The Path is recursively expanded to all MFT, and $MFT.
 ### Options
 
 ```
+--version, -v
+
+--help, -h
+
+--quiet, -q
+  Flag to suppress standard output
+  (default: False)
+
+--multiprocess, -m:
+  Flag to run multiprocessing (fast!)
+  (default: False)
+
+--size:
+  Size of the chunk to be processed for each process
+  (default: 500)
+
 --host:
   ElasticSearch host address
   (default: localhost)
@@ -64,10 +80,6 @@ $ mft2es /mftfiles/ # The Path is recursively expanded to all MFT, and $MFT.
 --index:
   Index name
   (default: mft2es)
-
---size:
-  bulk insert size
-  (default: 500)
 
 --scheme:
   Scheme to use (http, or https)
@@ -124,17 +136,18 @@ Extra feature. :sushi: :sushi: :sushi:
 Convert from Windows MFT to json file.
 
 ```bash
-$ mft2json /path/to/your/$MFT /path/to/output/target.json
+$ mft2json /path/to/your/$MFT -o /path/to/output/target.json
 ```
 
 or
 
-````python
+```python
 from mft2es import mft2json
 
 if __name__ == '__main__':
   filepath = '/path/to/your/$MFT'
   result: List[dict] = mft2json(filepath)
+```
 
 
 ## Output Format
@@ -305,7 +318,7 @@ $ docker run -t --rm -v $(pwd):/app/work sumeshi/mft2es:latest mft2es /app/work/
 
 ## mft2json
 ```bash
-$ docker run -t --rm -v $(pwd):/app/work sumeshi/mft2es:latest mft2es /app/work/\$MFT /app/work/out.json
+$ docker run -t --rm -v $(pwd):/app/work sumeshi/mft2es:latest mft2json /app/work/\$MFT /app/work/out.json
 ```
 
 Do not use the "latest" image if at all possible.  
