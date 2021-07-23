@@ -1,9 +1,10 @@
 # coding: utf-8
 from typing import List
 from pathlib import Path
+from multiprocessing import cpu_count
 
-from views.BaseView import BaseView
-from presenters.Mft2esPresenter import Mft2esPresenter 
+from mft2es.views.BaseView import BaseView
+from mft2es.presenters.Mft2esPresenter import Mft2esPresenter 
 
 
 class Mft2esView(BaseView):
@@ -44,6 +45,9 @@ class Mft2esView(BaseView):
     def run(self):
         view = Mft2esView()
         mft_files = self.__list_mft_files(self.args.mft_files)
+
+        if self.args.multiprocess:
+            view.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
 
         for mft_file in mft_files:
             view.log(f"Currently Importing {mft_file}.", self.args.quiet)

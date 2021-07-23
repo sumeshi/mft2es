@@ -142,7 +142,7 @@ $ mft2json /path/to/your/$MFT -o /path/to/output/target.json
 or
 
 ```python
-from mft2json import mft2json
+from mft2es import mft2json
 
 if __name__ == '__main__':
   filepath = '/path/to/your/$MFT'

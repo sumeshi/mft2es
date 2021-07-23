@@ -1,11 +1,12 @@
 # coding: utf-8
+from itertools import chain
 from pathlib import Path
 from typing import List
 
 import orjson
 from tqdm import tqdm
 
-from models.Mft2es import Mft2es
+from mft2es.models.Mft2es import Mft2es
 
 
 class Mft2jsonPresenter(object):
@@ -28,7 +29,7 @@ class Mft2jsonPresenter(object):
         r = Mft2es(self.input_path)
         generator = r.gen_records(self.multiprocess, self.chunk_size) if self.is_quiet else tqdm(r.gen_records(self.multiprocess, self.chunk_size))
 
-        buffer: List[dict] = sum(generator, list())
+        buffer: List[dict] = list(chain.from_iterable(generator))
         return buffer
 
     def export_json(self):

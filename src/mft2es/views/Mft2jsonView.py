@@ -1,7 +1,8 @@
 # coding: utf-8
+from multiprocessing import cpu_count
 
-from views.BaseView import BaseView
-from presenters.Mft2jsonPresenter import Mft2jsonPresenter
+from mft2es.views.BaseView import BaseView
+from mft2es.presenters.Mft2jsonPresenter import Mft2jsonPresenter
 
 
 class Mft2jsonView(BaseView):
@@ -18,6 +19,9 @@ class Mft2jsonView(BaseView):
     def run(self):
         view = Mft2jsonView()
         view.log(f"Converting {self.args.mft_file}.", self.args.quiet)
+
+        if self.args.multiprocess:
+            view.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
 
         Mft2jsonPresenter(
             input_path=self.args.mft_file,

@@ -1,13 +1,13 @@
 # coding: utf-8
 import traceback
-from pathlib import Path
 from typing import List
+from pathlib import Path
 
 import orjson
 from tqdm import tqdm
 
-from models.Mft2es import Mft2es
-from models.ElasticsearchUtils import ElasticsearchUtils
+from mft2es.models.Mft2es import Mft2es
+from mft2es.models.ElasticsearchUtils import ElasticsearchUtils
 
 
 class Mft2esPresenter(object):
@@ -42,7 +42,7 @@ class Mft2esPresenter(object):
         r = Mft2es(self.input_path)
         generator = r.gen_records(self.multiprocess, self.chunk_size) if self.is_quiet else tqdm(r.gen_records(self.multiprocess, self.chunk_size))
 
-        buffer: List[dict] = sum(generator, list())
+        buffer: List[List[dict]] = generator
         return buffer
 
     def bulk_import(self):
