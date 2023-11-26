@@ -31,7 +31,7 @@ def format_record(record: dict, filepath: str):
 
     Args:
         records (List[str]): chunk of MFT records(json).
-        rows (List[bytes]): chunk of MFT records(csv).
+        filepath str: file full path.
 
     Yields:
         List[dict]: MFT records.

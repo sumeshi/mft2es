@@ -34,9 +34,9 @@ class Mft2esView(BaseView):
         mft_path_list = list()
         for mft_file in mft_files:
             if Path(mft_file).is_dir():
-                mft_path_list.extend(mft_file.glob("**/mft"))
-                mft_path_list.extend(mft_file.glob("**/MFT"))
-                mft_path_list.extend(mft_file.glob("**/$MFT"))
+                mft_path_list.extend(Path(mft_file).glob("**/mft"))
+                mft_path_list.extend(Path(mft_file).glob("**/MFT"))
+                mft_path_list.extend(Path(mft_file).glob("**/$MFT"))
             else:
                 mft_path_list.append(Path(mft_file))
 
