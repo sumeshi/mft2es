@@ -3,8 +3,8 @@ from hashlib import md5
 from pathlib import Path
 
 import pytest
-from mft2es.views.mft2esView import entry_point as e2e
-from mft2es.views.mft2jsonView import entry_point as e2j
+from mft2es.views.Mft2esView import entry_point as m2e
+from mft2es.views.Mft2jsonView import entry_point as m2j
 
 # utils
 def calc_md5(path: Path) -> str:
@@ -20,7 +20,7 @@ def test__mft2es_help(monkeypatch):
     with pytest.raises(SystemExit) as exited:
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
-            e2e()
+            m2e()
         assert exited.value.code == 0
 
 def test__mft2es_version(monkeypatch):
@@ -28,7 +28,7 @@ def test__mft2es_version(monkeypatch):
     with pytest.raises(SystemExit) as exited:
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
-            e2e()
+            m2e()
         assert exited.value.code == 0
 
 def test__mft2json_help(monkeypatch):
@@ -36,7 +36,7 @@ def test__mft2json_help(monkeypatch):
     with pytest.raises(SystemExit) as exited:
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
-            e2j()
+            m2j()
         assert exited.value.code == 0
 
 def test__mft2json_version(monkeypatch):
@@ -44,5 +44,5 @@ def test__mft2json_version(monkeypatch):
     with pytest.raises(SystemExit) as exited:
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
-            e2j()
+            m2j()
         assert exited.value.code == 0
