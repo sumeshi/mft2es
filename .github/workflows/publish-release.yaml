@@ -47,8 +47,8 @@ jobs:
       - name: build
         run: |
           pip install nuitka
-          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2es.exe --output-dir=dist --assume-yes-for-downloads src/mft2es/views/mft2esView.py
-          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2json.exe --output-dir=dist --assume-yes-for-downloads src/mft2es/views/mft2jsonView.py
+          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2es.exe --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
+          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2json.exe --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
       
       - name: verify
         run: |
@@ -122,8 +122,8 @@ jobs:
       - name: build
         run: |
           pip install nuitka
-          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2es --output-dir=dist --assume-yes-for-downloads src/mft2es/views/mft2esView.py
-          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2json --output-dir=dist --assume-yes-for-downloads src/mft2es/views/mft2jsonView.py
+          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2es --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
+          poetry run python -m nuitka --standalone --onefile --follow-imports -o mft2json --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
       
       - name: verify
         run: |
