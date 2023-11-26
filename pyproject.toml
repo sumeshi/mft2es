@@ -17,17 +17,18 @@ mft2json = 'mft2es.views.Mft2jsonView:entry_point'
 
 [tool.poetry.dependencies]
 python = "^3.11"
-elasticsearch = "^7.7.1"
-mft = "^0.5.3"
-tqdm = "^4.46.1"
-urllib3 = "^1.26.5"
-orjson = "^3.6.0"
-importlib_metadata = "^4.6.1"
+elasticsearch = "^8.11.0"
+mft = "^0.6.1"
+tqdm = "^4.66.1"
+urllib3 = "^2.1.0"
+orjson = "^3.9.10"
 
 [tool.poetry.group.dev.dependencies]
-flake8 = "^3.8.3"
-mypy = "^0.780"
-black = "^19.10b0"
+mypy = "^1.7.1"
+flake8 = "^6.1.0"
+black = "^23.11.0"
+pytest = "^7.4.3"
+nuitka = "1.7.10"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
