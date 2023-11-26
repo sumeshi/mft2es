@@ -3,15 +3,15 @@
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
 [![PyPI version](https://badge.fury.io/py/mft2es.svg)](https://badge.fury.io/py/mft2es)
 [![Python Versions](https://img.shields.io/pypi/pyversions/mft2es.svg)](https://pypi.org/project/mft2es/)
-[![DockerHub Status](https://shields.io/docker/cloud/build/sumeshi/mft2es)](https://hub.docker.com/r/sumeshi/mft2es)
 
 ![mft2es logo](https://gist.githubusercontent.com/sumeshi/c2f430d352ae763273faadf9616a29e5/raw/681a72cc27829497283409e19a78808c1297c2db/mft2es.svg)
 
 Fast import of Windows Master File Table(\$MFT) into Elasticsearch.
 
-mft2es uses Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs).
+mft2es uses Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs), so it runs much faster than traditional software.
 
 ## Usage
+**mft2es** can be executed from the command line or incorporated into a Python script.
 
 ```bash
 $ mft2es /path/to/your/$MFT
@@ -29,13 +29,13 @@ if __name__ == '__main__':
 
 ### Args
 
-mft2es supports multiple file input, all arguments are determined as file paths.
+mft2es supports simultaneous import of multiple files.
 
 ```bash
 $ mft2es foo/MFT bar/MFT
 ```
 
-or
+Additionally, it also allows for recursive import under the specified directory.
 
 ```bash
 $ tree .
@@ -62,40 +62,32 @@ $ mft2es /mftfiles/ # The Path is recursively expanded to all MFT, and $MFT.
   (default: False)
 
 --multiprocess, -m:
-  Flag to run multiprocessing (fast!)
+  Enable multiprocessing for faster execution
   (default: False)
 
 --size:
-  Size of the chunk to be processed for each process
-  (default: 500)
+  Chunk size for processing (default: 500)
 
 --host:
-  ElasticSearch host address
-  (default: localhost)
+  ElasticSearch host address (default: localhost)
 
 --port:
-  ElasticSearch port number
-  (default: 9200)
+  ElasticSearch port number (default: 9200)
 
 --index:
-  Index name
-  (default: mft2es)
+  Destination index name for importing (default: mft2es)
 
 --scheme:
-  Scheme to use (http, or https)
-  (default: http)
+  Protocol scheme to use (http or https) (default: http)
 
 --pipeline
-  Elasticsearch Ingest Pipeline to use
-  (default: )
+  Elasticsearch Ingest Pipeline to use (default: )
 
 --login:
-  The login to use if Elastic Security is enable
-  (default: )
+  The login to use if Elastic Security is enabled (default: )
 
 --pwd:
-  The password linked to the login provided
-  (default: )
+  The password associated with the provided login (default: )
 ```
 
 ### Examples
@@ -113,12 +105,6 @@ if __name__ == '__main__':
     mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foobar', size=500)
 ```
 
-With the Amazon Elasticsearch Serivce (ES):
-
-```
-$ mft2es /path/to/your/$MFT --host=example.us-east-1.es.amazonaws.com --port=443 --scheme=https --index=foobar
-```
-
 With credentials for Elastic Security:
 
 ```
@@ -131,15 +117,15 @@ Note: The current version does not verify the certificate.
 
 ### Mft2json
 
-Extra feature. :sushi: :sushi: :sushi:
+An additional feature: :sushi: :sushi: :sushi:
 
-Convert from Windows MFT to json file.
+Convert Windows MFT to a JSON file.
 
 ```bash
 $ mft2json /path/to/your/$MFT -o /path/to/output/target.json
 ```
 
-or
+Convert Windows Event Logs to a Python List[dict] object.
 
 ```python
 from mft2es import mft2json
@@ -148,7 +134,6 @@ if __name__ == '__main__':
   filepath = '/path/to/your/$MFT'
   result: List[dict] = mft2json(filepath)
 ```
-
 
 ## Output Format
 
@@ -295,44 +280,32 @@ The structures is not well optimized for searchable with Elasticsearch. I'm wait
 
 ## Installation
 
-### via PyPI
+### from PyPI
 ```
 $ pip install mft2es
 ```
 
-### via DockerHub
-```
-$ docker pull sumeshi/mft2es:latest
-```
+### from GitHub Releases
+The version compiled into a binary using Nuitka is also available for use.
 
-## Run with Docker
-https://hub.docker.com/r/sumeshi/mft2es
-
-
-## mft2es
 ```bash
-# "host.docker.internal" is only available in mac and windows environments.
-# For linux, use the --add-host option.
-$ docker run -t --rm -v $(pwd):/app/work sumeshi/mft2es:latest mft2es /app/work/\$MFT --host=host.docker.internal
+$ chmod +x ./mft2es
+$ ./mft2es {{options...}}
 ```
 
-## mft2json
-```bash
-$ docker run -t --rm -v $(pwd):/app/work sumeshi/mft2es:latest mft2json /app/work/\$MFT /app/work/out.json
+```powershell
+> mft2es.exe {{options...}}
 ```
-
-Do not use the "latest" image if at all possible.  
-The "latest" image is not a released version, but is built from the contents of the master branch.
 
 ## Contributing
 
-[CONTRIBUTING](https://github.com/sumeshi/mft2es/blob/master/CONTRIBUTING.md)
-
-The source code for mft2es is hosted at GitHub, and you may download, fork, and review it from this repository(https://github.com/sumeshi/mft2es).
+The source code for mft2es is hosted at GitHub, and you may download, fork, and review it from this repository(https://github.com/sumeshi/mft2es).  
 Please report issues and feature requests. :sushi: :sushi: :sushi:
 
 ## License
 
 mft2es is released under the [MIT](https://github.com/sumeshi/mft2es/blob/master/LICENSE) License.
 
-Powered by [pymft-rs](https://github.com/omerbenamram/pymft-rs).
+Powered by following libraries:
+- [pymft-rs](https://github.com/omerbenamram/pymft-rs)
+- [Nuitka](https://github.com/Nuitka/Nuitka)
