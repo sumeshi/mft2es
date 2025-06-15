@@ -1,0 +1,108 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Project-specific rules for mft2es
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# mft2es - Project Specific Rules
+
+## Project Overview
+mft2es is a Python tool for fast import of Windows Master File Table ($MFT) into Elasticsearch using Rust library pymft-rs for high performance.
+
+## Technology Stack
+- **Language**: Python 3.11+
+- **Core Dependencies**: 
+  - mft (MFT parser library)
+  - elasticsearch (Elasticsearch client)
+  - orjson (High-performance JSON library)
+  - tqdm (Progress bar library)
+- **Package Manager**: pip/uv
+- **Development Tools**: pytest, black, mypy, flake8
+
+## Project Structure
+```
+mft2es/
+├── src/mft2es/           # Main package
+│   ├── models/           # Data models
+│   ├── presenters/       # Data presentation layer
+│   └── views/            # CLI views
+├── tests/                # Test files
+├── pyproject.toml        # Project configuration
+├── uv.lock              # Dependency lock file
+└── README.md            # Project documentation
+```
+
+## Domain-Specific Requirements
+
+### Performance Considerations
+- Optimize for large MFT file processing
+- Use streaming/chunked processing for memory efficiency
+- Leverage Rust-based pymft-rs for maximum performance
+- Implement progress reporting for long-running operations
+- Support multiprocessing for faster execution
+
+### Elasticsearch Integration
+- Support multiple Elasticsearch versions
+- Implement proper index mapping for Windows MFT fields
+- Handle connection errors and retries gracefully
+- Support bulk indexing for performance
+- Support custom ingest pipelines
+
+### MFT Processing Specifics
+- Handle various MFT formats correctly
+- Preserve all relevant file system metadata
+- Support recursive directory processing for multiple MFT files
+- Handle malformed or corrupted MFT files gracefully
+- Process file attributes, timestamps, and references accurately
+
+### CLI Design
+- Provide clear progress indicators with tqdm
+- Support configuration through command-line arguments
+- Implement proper error messages and help text
+- Support both single file and batch processing modes
+- Allow quiet mode for automated processing
+
+### Data Processing
+- Implement proper JSON serialization for Elasticsearch
+- Handle timestamp conversion and formatting correctly
+- Support custom field mapping and transformation
+- Ensure data integrity during processing
+- Provide both mft2es and mft2json functionality
+
+### Security and Authentication
+- Support Elasticsearch authentication (login/password)
+- Handle secure connections (HTTPS)
+- Note: Current version does not verify certificates
+
+## Development Workflow
+- Focus on CLI usability and performance
+- Test with real MFT files of various sizes
+- Benchmark performance improvements
+- Document configuration options thoroughly
+- Use modern Python tooling (uv, black, mypy)
+
+---
+
+## AI Assistant Instructions
+
+### Project Context Awareness
+- Always consider the Windows Master File Table processing context
+- Understand the performance-critical nature of the tool
+- Be aware of Elasticsearch indexing requirements
+- Consider CLI user experience in suggestions
+- Remember that MFT files contain file system metadata, not event logs
+
+### Enhancement Suggestions
+- When suggesting improvements, consider:
+  - Performance impact on large MFT file processing
+  - Elasticsearch compatibility
+  - CLI usability and batch processing
+  - Memory efficiency for large file systems
+  - Forensic analysis requirements
+- Always test suggestions with the project's core functionality in mind
+- Consider the forensic analysis use case when making suggestions 
