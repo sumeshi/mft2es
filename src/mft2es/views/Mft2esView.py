@@ -64,6 +64,7 @@ class Mft2esView(BaseView):
                 is_quiet=self.args.quiet,
                 multiprocess=self.args.multiprocess,
                 chunk_size=int(self.args.size),
+                logger=self.log
             ).bulk_import()
 
         view.log("Import completed.", self.args.quiet)

@@ -33,6 +33,9 @@ class ElasticsearchUtils(object):
             records (List[dict]): List of each records read from MFT files.
             index_name (str): Target Elasticsearch Index.
             pipeline (str): Target Elasticsearch Ingest Pipeline
+        
+             Returns:
+            tuple: (success_count, failed_list) - Results of bulk indexing operation
         """
         events = []
         for record in records:
@@ -40,4 +43,10 @@ class ElasticsearchUtils(object):
             if pipeline != "":
                 event["pipeline"] = pipeline
             events.append(event)
-        bulk(self.es, events, raise_on_error=False)
+        
+        # Perform bulk indexing and return results
+        try:
+            success, failed = bulk(self.es, events, raise_on_error=False, stats_only=False)
+            return (success, failed)
+        except Exception as e:
+            raise Exception(f"Bulk indexing error: {e}") from e

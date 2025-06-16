@@ -6,9 +6,9 @@
 
 ![mft2es logo](https://gist.githubusercontent.com/sumeshi/c2f430d352ae763273faadf9616a29e5/raw/681a72cc27829497283409e19a78808c1297c2db/mft2es.svg)
 
-Fast import of Windows Master File Table(\$MFT) into Elasticsearch.
+Fast import tool for Windows Master File Table (\$MFT) into Elasticsearch.
 
-mft2es uses Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs), so it runs much faster than traditional software.
+mft2es uses the Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs), making it much faster than traditional tools.
 
 ## Usage
 **mft2es** can be executed from the command line or incorporated into a Python script.
@@ -35,7 +35,7 @@ mft2es supports simultaneous import of multiple files.
 $ mft2es foo/MFT bar/MFT
 ```
 
-Additionally, it also allows for recursive import under the specified directory.
+Additionally, it allows for recursive import under the specified directory.
 
 ```bash
 $ tree .
@@ -47,7 +47,7 @@ mftfiles/
       ├── MFT
       └── $MFT
 
-$ mft2es /mftfiles/ # The Path is recursively expanded to all MFT, and $MFT.
+$ mft2es /mftfiles/ # The path is recursively expanded to include all MFT and $MFT files.
 ```
 
 ### Options
@@ -92,13 +92,13 @@ $ mft2es /mftfiles/ # The Path is recursively expanded to all MFT, and $MFT.
 
 ### Examples
 
-When using from the commandline interface:
+When using the command-line interface:
 
 ```
 $ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foobar --size=500
 ```
 
-When using from the python-script:
+When using from a Python script:
 
 ```py
 if __name__ == '__main__':
@@ -125,7 +125,7 @@ Convert Windows MFT to a JSON file.
 $ mft2json /path/to/your/$MFT -o /path/to/output/target.json
 ```
 
-Convert Windows Event Logs to a Python List[dict] object.
+Convert Windows MFT to a Python List[dict] object.
 
 ```python
 from mft2es import mft2json
@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
 ## Output Format
 
-The structures is not well optimized for searchable with Elasticsearch. I'm waiting for your PR!!
+The structure is not well optimized for searching with Elasticsearch. I'm waiting for your PR!!
 
 ```json
 [
@@ -280,13 +280,13 @@ The structures is not well optimized for searchable with Elasticsearch. I'm wait
 
 ## Installation
 
-### from PyPI
+### From PyPI
 ```
 $ pip install mft2es
 ```
 
-### from GitHub Releases
-The version compiled into a binary using Nuitka is also available for use.
+### From GitHub Releases
+Pre-compiled binary versions using Nuitka are also available.
 
 ```bash
 $ chmod +x ./mft2es
@@ -299,13 +299,17 @@ $ ./mft2es {{options...}}
 
 ## Contributing
 
-The source code for mft2es is hosted at GitHub, and you may download, fork, and review it from this repository(https://github.com/sumeshi/mft2es).  
+The source code for mft2es is hosted on GitHub, and you can download, fork, and review it from this repository (https://github.com/sumeshi/mft2es).  
 Please report issues and feature requests. :sushi: :sushi: :sushi:
+
+## Included in
+- [Tsurugi Linux [Lab] 2022 - 2024](https://tsurugi-linux.org/) - DFIR Linux distribution
+Thank you for your interest in mft2es!
 
 ## License
 
 mft2es is released under the [MIT](https://github.com/sumeshi/mft2es/blob/master/LICENSE) License.
 
-Powered by following libraries:
+Powered by the following libraries:
 - [pymft-rs](https://github.com/omerbenamram/pymft-rs)
 - [Nuitka](https://github.com/Nuitka/Nuitka)
