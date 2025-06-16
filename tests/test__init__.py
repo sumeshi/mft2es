@@ -46,3 +46,21 @@ def test__mft2json_version(monkeypatch):
             m.setattr("sys.argv", argv)
             m2j()
         assert exited.value.code == 0
+
+
+# behavior test cases 
+def test__mft2json_convert(monkeypatch):
+    path = 'tests/cache/MFT.json'
+    argv = ["mft2json", "-o", path, "tests/cache/MFT"]
+    with monkeypatch.context() as m:
+        m.setattr("sys.argv", argv)
+        m2j()
+    assert calc_md5(Path(path)) == "23ca44b6c79e715f176ea3fd8fecd6e2"
+
+def test__mft2json_convert_multiprocessing(monkeypatch):
+    path = 'tests/cache/MFT-m.json'
+    argv = ["mft2json", "-o", path, "-m", "tests/cache/MFT"]
+    with monkeypatch.context() as m:
+        m.setattr("sys.argv", argv)
+        m2j()
+    assert calc_md5(Path(path)) == "23ca44b6c79e715f176ea3fd8fecd6e2"
