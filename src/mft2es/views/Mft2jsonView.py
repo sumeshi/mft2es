@@ -13,8 +13,21 @@ class Mft2jsonView(BaseView):
         self.args = self.parser.parse_args()
 
     def define_options(self):
-        self.parser.add_argument("mft_file", type=str, help="Windows MFT file to input.")
-        self.parser.add_argument("--output-file", "-o", type=str, default="", help="json file path to output.")
+        self.parser.add_argument(
+            "mft_file", type=str, help="Windows MFT file to input."
+        )
+        self.parser.add_argument(
+            "--output-file",
+            "-o",
+            type=str,
+            default="",
+            help="json file path to output.",
+        )
+        self.parser.add_argument(
+            "--timeline",
+            action="store_true",
+            help="Enable timeline analysis mode (separates records by type)",
+        )
 
     def run(self):
         view = Mft2jsonView()
@@ -23,12 +36,16 @@ class Mft2jsonView(BaseView):
         if self.args.multiprocess:
             view.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
 
+        if self.args.timeline:
+            view.log("Timeline analysis mode enabled", self.args.quiet)
+
         Mft2jsonPresenter(
             input_path=self.args.mft_file,
             output_path=self.args.output_file,
             is_quiet=self.args.quiet,
             multiprocess=self.args.multiprocess,
             chunk_size=self.args.size,
+            timeline_mode=self.args.timeline,
         ).export_json()
 
         view.log("Converted.", self.args.quiet)
