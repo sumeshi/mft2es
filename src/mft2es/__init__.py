@@ -8,6 +8,7 @@ from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
 
 # for use via python-script!
 
+
 def mft2es(
     input_path: str,
     host: str = "localhost",
@@ -19,7 +20,7 @@ def mft2es(
     pwd: str = "",
     multiprocess: bool = False,
     chunk_size: int = 500,
-    timeline_mode: bool = False
+    timeline_mode: bool = False,
 ) -> None:
     """Fast import of Windows MFT into Elasticsearch.
     Args:
@@ -70,11 +71,16 @@ def mft2es(
         is_quiet=True,
         multiprocess=multiprocess,
         chunk_size=int(chunk_size),
-        timeline_mode=timeline_mode
+        timeline_mode=timeline_mode,
     ).bulk_import()
 
 
-def mft2json(filepath: str, multiprocess: bool = False, chunk_size: int = 500, timeline_mode: bool = False) -> List[dict]:
+def mft2json(
+    filepath: str,
+    multiprocess: bool = False,
+    chunk_size: int = 500,
+    timeline_mode: bool = False,
+) -> List[dict]:
     """Convert Windows MFT to List[dict].
 
     Args:
@@ -89,8 +95,18 @@ def mft2json(filepath: str, multiprocess: bool = False, chunk_size: int = 500, t
     """
     mft = Mft2es(Path(filepath).resolve())
     if timeline_mode:
-        records: List[dict] = sum(list(mft.gen_timeline_records(multiprocess=multiprocess, chunk_size=chunk_size)), list())
+        records: List[dict] = sum(
+            list(
+                mft.gen_timeline_records(
+                    multiprocess=multiprocess, chunk_size=chunk_size
+                )
+            ),
+            list(),
+        )
     else:
-        records: List[dict] = sum(list(mft.gen_records(multiprocess=multiprocess, chunk_size=chunk_size)), list())
+        records: List[dict] = sum(
+            list(mft.gen_records(multiprocess=multiprocess, chunk_size=chunk_size)),
+            list(),
+        )
 
     return records

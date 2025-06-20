@@ -18,13 +18,13 @@ class Mft2jsonPresenter(object):
         is_quiet: bool = False,
         multiprocess: bool = False,
         chunk_size: int = 500,
-        timeline_mode: bool = False
+        timeline_mode: bool = False,
     ):
         self.input_path = Path(input_path).resolve()
         self.output_path: Path = (
             Path(output_path)
             if output_path
-            else Path(self.input_path).with_suffix('.json')
+            else Path(self.input_path).with_suffix(".json")
         )
         self.is_quiet = is_quiet
         self.multiprocess = multiprocess
@@ -33,22 +33,26 @@ class Mft2jsonPresenter(object):
 
     def export_json(self) -> None:
         r = Mft2es(self.input_path)
-        
+
         # Use unified generation function with timeline mode parameter
         generator = (
             r.gen_timeline_records(
-                multiprocess=self.multiprocess, 
+                multiprocess=self.multiprocess,
                 chunk_size=self.chunk_size,
-                timeline_mode=self.timeline_mode
-            ) 
-            if self.is_quiet 
-            else tqdm(r.gen_timeline_records(
-                multiprocess=self.multiprocess, 
-                chunk_size=self.chunk_size,
-                timeline_mode=self.timeline_mode
-            ))
+                timeline_mode=self.timeline_mode,
+            )
+            if self.is_quiet
+            else tqdm(
+                r.gen_timeline_records(
+                    multiprocess=self.multiprocess,
+                    chunk_size=self.chunk_size,
+                    timeline_mode=self.timeline_mode,
+                )
+            )
         )
 
         self.output_path.write_text(
-            orjson.dumps(list(chain.from_iterable(generator)), option=orjson.OPT_INDENT_2).decode("utf-8")
+            orjson.dumps(
+                list(chain.from_iterable(generator)), option=orjson.OPT_INDENT_2
+            ).decode("utf-8")
         )

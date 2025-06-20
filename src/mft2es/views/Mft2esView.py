@@ -4,7 +4,7 @@ from pathlib import Path
 from multiprocessing import cpu_count
 
 from mft2es.views.BaseView import BaseView
-from mft2es.presenters.Mft2esPresenter import Mft2esPresenter 
+from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
 
 
 class Mft2esView(BaseView):
@@ -22,15 +22,31 @@ class Mft2esView(BaseView):
             help="Windows MFT or directories containing them. (filename must be set 'MFT', or '$MFT')",
         )
 
-        self.parser.add_argument("--host", default="localhost", help="ElasticSearch host")
-        self.parser.add_argument("--port", default=9200, help="ElasticSearch port number")
+        self.parser.add_argument(
+            "--host", default="localhost", help="ElasticSearch host"
+        )
+        self.parser.add_argument(
+            "--port", default=9200, help="ElasticSearch port number"
+        )
         self.parser.add_argument("--index", default="mft2es", help="Index name")
-        self.parser.add_argument("--scheme", default="http", help="Scheme to use (http, https)")
-        self.parser.add_argument("--pipeline", default="", help="Ingest pipeline to use")
-        self.parser.add_argument("--login", default="", help="Login to use to connect to Elastic database")
-        self.parser.add_argument("--pwd", default="", help="Password associated with the login")
-        self.parser.add_argument("--timeline", action="store_true", help="Enable timeline analysis mode (separates records by type)")
-    
+        self.parser.add_argument(
+            "--scheme", default="http", help="Scheme to use (http, https)"
+        )
+        self.parser.add_argument(
+            "--pipeline", default="", help="Ingest pipeline to use"
+        )
+        self.parser.add_argument(
+            "--login", default="", help="Login to use to connect to Elastic database"
+        )
+        self.parser.add_argument(
+            "--pwd", default="", help="Password associated with the login"
+        )
+        self.parser.add_argument(
+            "--timeline",
+            action="store_true",
+            help="Enable timeline analysis mode (separates records by type)",
+        )
+
     def __list_mft_files(self, mft_files: List[str]) -> List[Path]:
         mft_path_list = list()
         for mft_file in mft_files:
@@ -69,7 +85,7 @@ class Mft2esView(BaseView):
                 multiprocess=self.args.multiprocess,
                 chunk_size=int(self.args.size),
                 logger=self.log,
-                timeline_mode=self.args.timeline
+                timeline_mode=self.args.timeline,
             ).bulk_import()
 
         view.log("Import completed.", self.args.quiet)
