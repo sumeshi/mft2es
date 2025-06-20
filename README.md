@@ -2,22 +2,21 @@
 
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
 [![PyPI version](https://badge.fury.io/py/mft2es.svg)](https://badge.fury.io/py/mft2es)
-[![Python Versions](https://img.shields.io/pypi/pyversions/mft2es.svg)](https://pypi.org/project/mft2es/)
+[![pytest](https://github.com/sumeshi/mft2es/actions/workflows/test.yml/badge.svg)](https://github.com/sumeshi/mft2es/actions/workflows/test.yml)
 
 ![mft2es logo](https://gist.githubusercontent.com/sumeshi/c2f430d352ae763273faadf9616a29e5/raw/681a72cc27829497283409e19a78808c1297c2db/mft2es.svg)
 
-Fast import tool for Windows Master File Table (\$MFT) into Elasticsearch.
+A library for fast parse & import of Windows Master File Table(\$MFT) into Elasticsearch.
 
-mft2es uses the Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs), making it much faster than traditional tools.
+**mft2es** uses the Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs), making it much faster than traditional tools.
 
 ## Usage
+
 **mft2es** can be executed from the command line or incorporated into a Python script.
 
 ```bash
 $ mft2es /path/to/your/$MFT
 ```
-
-or
 
 ```python
 from mft2es import mft2es
@@ -27,27 +26,26 @@ if __name__ == '__main__':
   mft2es(filepath)
 ```
 
-### Args
+### Arguments
 
 mft2es supports simultaneous import of multiple files.
 
 ```bash
-$ mft2es foo/MFT bar/MFT
+$ mft2es file1/$MFT file2/$MFT file3/$MFT
 ```
 
-Additionally, it allows for recursive import under the specified directory.
+It also allows recursive import from the specified directory.
 
 ```bash
 $ tree .
 mftfiles/
-  ├── MFT
+  ├── $MFT
   └── subdirectory/
-    ├── MFT
+    ├── $MFT
     └── subsubdirectory/
-      ├── MFT
       └── $MFT
 
-$ mft2es /mftfiles/ # The path is recursively expanded to include all MFT and $MFT files.
+$ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files.
 ```
 
 ### Options
@@ -58,7 +56,7 @@ $ mft2es /mftfiles/ # The path is recursively expanded to include all MFT and $M
 --help, -h
 
 --quiet, -q
-  Flag to suppress standard output
+  Suppress standard output
   (default: False)
 
 --multiprocess, -m:
@@ -69,19 +67,23 @@ $ mft2es /mftfiles/ # The path is recursively expanded to include all MFT and $M
   Chunk size for processing (default: 500)
 
 --host:
-  ElasticSearch host address (default: localhost)
+  Elasticsearch host address (default: localhost)
 
 --port:
-  ElasticSearch port number (default: 9200)
+  Elasticsearch port number (default: 9200)
 
 --index:
-  Destination index name for importing (default: mft2es)
+  Destination index name (default: mft2es)
 
 --scheme:
   Protocol scheme to use (http or https) (default: http)
 
---pipeline
+--pipeline:
   Elasticsearch Ingest Pipeline to use (default: )
+
+--timeline:
+  Enable timeline analysis mode for MACB format
+  (default: False)
 
 --login:
   The login to use if Elastic Security is enabled (default: )
@@ -92,23 +94,29 @@ $ mft2es /mftfiles/ # The path is recursively expanded to include all MFT and $M
 
 ### Examples
 
-When using the command-line interface:
+When using from the command line:
 
-```
+```bash
 $ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foobar --size=500
 ```
 
 When using from a Python script:
 
-```py
+```python
 if __name__ == '__main__':
-    mft2es('/path/to/your/$MFT', host=localhost, port=9200, index='foobar', size=500)
+    mft2es('/path/to/your/$MFT', host='localhost', port=9200, index='foobar', size=500)
 ```
 
 With credentials for Elastic Security:
 
-```
+```bash
 $ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foobar --login=elastic --pwd=******
+```
+
+With timeline analysis mode:
+
+```bash
+$ mft2es /path/to/your/$MFT --timeline --index=mft-timeline
 ```
 
 Note: The current version does not verify the certificate.
@@ -119,13 +127,13 @@ Note: The current version does not verify the certificate.
 
 An additional feature: :sushi: :sushi: :sushi:
 
-Convert Windows MFT to a JSON file.
+Convert Windows Master File Table to a JSON file.
 
 ```bash
 $ mft2json /path/to/your/$MFT -o /path/to/output/target.json
 ```
 
-Convert Windows MFT to a Python List[dict] object.
+Convert Windows Master File Table to a Python List[dict] object.
 
 ```python
 from mft2es import mft2json
@@ -135,9 +143,19 @@ if __name__ == '__main__':
   result: List[dict] = mft2json(filepath)
 ```
 
-## Output Format
+### Timeline Analysis
 
-The structure is not well optimized for searching with Elasticsearch. I'm waiting for your PR!!
+mft2es supports timeline analysis mode that creates MACB (Modified, Accessed, Created, Birth) timeline records for forensic investigation.
+
+```bash
+$ mft2es /path/to/your/$MFT --timeline --index=mft-timeline
+```
+
+This mode creates separate records for each timestamp type (M, A, C, B) from both StandardInformation and FileName attributes, making it easier to analyze file system activity over time.
+
+## Output Format Examples
+
+### Standard Mode
 
 ```json
 [
@@ -273,20 +291,86 @@ The structure is not well optimized for searching with Elasticsearch. I'm waitin
         "data": null
       }
     }
-  }
-  ...
+  },
+]
+```
+
+### Timeline Mode
+
+```json
+[
+  {
+    "@timestamp": "2007-06-30T12:50:52.252395Z",
+    "record_number": 0,
+    "mft": {
+      "header": {
+        "signature": [
+          70,
+          73,
+          76,
+          69
+        ],
+        "usa_offset": 48,
+        "usa_size": 3,
+        "metadata_transaction_journal": 77648146,
+        "sequence": 1,
+        "hard_link_count": 1,
+        "first_attribute_record_offset": 56,
+        "flags": "ALLOCATED",
+        "used_entry_size": 424,
+        "total_entry_size": 1024,
+        "base_reference": {
+          "entry": 0,
+          "sequence": 0
+        },
+        "first_attribute_id": 6
+      }
+    },
+    "attribute": {
+      "type": "StandardInformation",
+      "macb_type": "M",
+      "header": {
+        "record_length": 96,
+        "form_code": 0,
+        "residential_header": {
+          "index_flag": 0
+        },
+        "name_size": 0,
+        "name_offset": null,
+        "data_flags": "(empty)",
+        "instance": 0,
+        "name": ""
+      },
+      "data": {
+        "file_flags": "FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM",
+        "max_version": 0,
+        "version": 0,
+        "class_id": 0,
+        "owner_id": 0,
+        "security_id": 256,
+        "quota": 0,
+        "usn": 0
+      }
+    },
+    "file": {
+      "path": "$MFT",
+      "name": "$MFT"
+    }
+  },
 ]
 ````
 
 ## Installation
 
-### From PyPI
-```
+### from PyPI
+
+```bash
 $ pip install mft2es
 ```
 
-### From GitHub Releases
-Pre-compiled binary versions using Nuitka are also available.
+### from GitHub Releases
+
+The version compiled into a binary using Nuitka is also available for use.
 
 ```bash
 $ chmod +x ./mft2es
@@ -299,17 +383,19 @@ $ ./mft2es {{options...}}
 
 ## Contributing
 
-The source code for mft2es is hosted on GitHub, and you can download, fork, and review it from this repository (https://github.com/sumeshi/mft2es).  
+The source code for mft2es is hosted on GitHub. You can download, fork, and review it from this repository: https://github.com/sumeshi/mft2es.
 Please report issues and feature requests. :sushi: :sushi: :sushi:
 
 ## Included in
+
 - [Tsurugi Linux [Lab] 2022 - 2024](https://tsurugi-linux.org/) - DFIR Linux distribution
+
 Thank you for your interest in mft2es!
 
 ## License
 
 mft2es is released under the [MIT](https://github.com/sumeshi/mft2es/blob/master/LICENSE) License.
 
-Powered by the following libraries:
+Powered by following libraries:
 - [pymft-rs](https://github.com/omerbenamram/pymft-rs)
 - [Nuitka](https://github.com/Nuitka/Nuitka)

@@ -26,7 +26,7 @@ class ElasticsearchUtils(object):
         """
         return sha1(orjson.dumps(record, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
-    def bulk_indice(self, records: List[dict], index_name: str, pipeline: str) -> None:
+    def bulk_indice(self, records: List[dict], index_name: str, pipeline: str) -> tuple:
         """Bulk indices the documents into Elasticsearch.
 
         Args:
@@ -34,7 +34,7 @@ class ElasticsearchUtils(object):
             index_name (str): Target Elasticsearch Index.
             pipeline (str): Target Elasticsearch Ingest Pipeline
         
-             Returns:
+        Returns:
             tuple: (success_count, failed_list) - Results of bulk indexing operation
         """
         events = []

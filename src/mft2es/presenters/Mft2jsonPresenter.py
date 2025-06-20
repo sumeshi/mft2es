@@ -17,7 +17,8 @@ class Mft2jsonPresenter(object):
         output_path: str,
         is_quiet: bool = False,
         multiprocess: bool = False,
-        chunk_size: int = 500
+        chunk_size: int = 500,
+        timeline_mode: bool = False
     ):
         self.input_path = Path(input_path).resolve()
         self.output_path: Path = (
@@ -28,15 +29,26 @@ class Mft2jsonPresenter(object):
         self.is_quiet = is_quiet
         self.multiprocess = multiprocess
         self.chunk_size = chunk_size
+        self.timeline_mode = timeline_mode
 
-    def mft2json(self) -> List[dict]:
+    def export_json(self) -> None:
         r = Mft2es(self.input_path)
-        generator = r.gen_records(self.multiprocess, self.chunk_size) if self.is_quiet else tqdm(r.gen_records(self.multiprocess, self.chunk_size))
+        
+        # Use unified generation function with timeline mode parameter
+        generator = (
+            r.gen_timeline_records(
+                multiprocess=self.multiprocess, 
+                chunk_size=self.chunk_size,
+                timeline_mode=self.timeline_mode
+            ) 
+            if self.is_quiet 
+            else tqdm(r.gen_timeline_records(
+                multiprocess=self.multiprocess, 
+                chunk_size=self.chunk_size,
+                timeline_mode=self.timeline_mode
+            ))
+        )
 
-        buffer: List[dict] = list(chain.from_iterable(generator))
-        return buffer
-
-    def export_json(self):
         self.output_path.write_text(
-            orjson.dumps(self.mft2json(), option=orjson.OPT_INDENT_2).decode("utf-8")
+            orjson.dumps(list(chain.from_iterable(generator)), option=orjson.OPT_INDENT_2).decode("utf-8")
         )

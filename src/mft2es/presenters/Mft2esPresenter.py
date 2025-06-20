@@ -25,7 +25,8 @@ class Mft2esPresenter(object):
         is_quiet: bool = False,
         multiprocess: bool = False,
         chunk_size: int = 500,
-        logger=None
+        logger=None,
+        timeline_mode: bool = False
     ):
         self.input_path = input_path
         self.host = host
@@ -39,13 +40,18 @@ class Mft2esPresenter(object):
         self.multiprocess = multiprocess
         self.chunk_size = chunk_size
         self.logger = logger
+        self.timeline_mode = timeline_mode
 
-    def mft2es(self) -> List[dict]:
-        r = Mft2es(self.input_path)
-        generator = r.gen_records(self.multiprocess, self.chunk_size) if self.is_quiet else tqdm(r.gen_records(self.multiprocess, self.chunk_size))
-
-        buffer: List[List[dict]] = generator
-        return buffer
+    def mft2es(self):
+        mft2es = Mft2es(self.input_path)
+        
+        # Timeline mode uses specialized record generation
+        for records in mft2es.gen_timeline_records(
+            multiprocess=self.multiprocess, 
+            chunk_size=self.chunk_size,
+            timeline_mode=self.timeline_mode
+        ):
+            yield records
 
     def bulk_import(self):
         es = ElasticsearchUtils(

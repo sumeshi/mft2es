@@ -29,6 +29,7 @@ class Mft2esView(BaseView):
         self.parser.add_argument("--pipeline", default="", help="Ingest pipeline to use")
         self.parser.add_argument("--login", default="", help="Login to use to connect to Elastic database")
         self.parser.add_argument("--pwd", default="", help="Password associated with the login")
+        self.parser.add_argument("--timeline", action="store_true", help="Enable timeline analysis mode (separates records by type)")
     
     def __list_mft_files(self, mft_files: List[str]) -> List[Path]:
         mft_path_list = list()
@@ -49,6 +50,9 @@ class Mft2esView(BaseView):
         if self.args.multiprocess:
             view.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
 
+        if self.args.timeline:
+            view.log("Timeline analysis mode enabled", self.args.quiet)
+
         for mft_file in mft_files:
             view.log(f"Currently Importing {mft_file}.", self.args.quiet)
 
@@ -64,7 +68,8 @@ class Mft2esView(BaseView):
                 is_quiet=self.args.quiet,
                 multiprocess=self.args.multiprocess,
                 chunk_size=int(self.args.size),
-                logger=self.log
+                logger=self.log,
+                timeline_mode=self.args.timeline
             ).bulk_import()
 
         view.log("Import completed.", self.args.quiet)
