@@ -19,6 +19,7 @@ class Mft2jsonPresenter(object):
         multiprocess: bool = False,
         chunk_size: int = 500,
         timeline_mode: bool = False,
+        tags: str = "",
     ):
         self.input_path = Path(input_path).resolve()
         self.output_path: Path = (
@@ -30,6 +31,7 @@ class Mft2jsonPresenter(object):
         self.multiprocess = multiprocess
         self.chunk_size = chunk_size
         self.timeline_mode = timeline_mode
+        self.tags = tags
 
     def export_json(self) -> None:
         r = Mft2es(self.input_path)
@@ -40,6 +42,7 @@ class Mft2jsonPresenter(object):
                 multiprocess=self.multiprocess,
                 chunk_size=self.chunk_size,
                 timeline_mode=self.timeline_mode,
+                tags=self.tags,
             )
             if self.is_quiet
             else tqdm(
@@ -47,6 +50,7 @@ class Mft2jsonPresenter(object):
                     multiprocess=self.multiprocess,
                     chunk_size=self.chunk_size,
                     timeline_mode=self.timeline_mode,
+                    tags=self.tags,
                 )
             )
         )

@@ -2,7 +2,7 @@
 
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
 [![PyPI version](https://badge.fury.io/py/mft2es.svg)](https://badge.fury.io/py/mft2es)
-[![pytest](https://github.com/sumeshi/mft2es/actions/workflows/test.yml/badge.svg)](https://github.com/sumeshi/mft2es/actions/workflows/test.yml)
+[![pytest](https://github.com/sumeshi/mft2es/actions/workflows/test.yaml/badge.svg)](https://github.com/sumeshi/mft2es/actions/workflows/test.yaml)
 
 ![mft2es logo](https://gist.githubusercontent.com/sumeshi/c2f430d352ae763273faadf9616a29e5/raw/681a72cc27829497283409e19a78808c1297c2db/mft2es.svg)
 
@@ -85,6 +85,10 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   Enable timeline analysis mode for MACB format
   (default: False)
 
+--tags:
+  Comma-separated tags to add to each record for identification
+  (e.g., hostname, domain name) (default: )
+
 --login:
   The login to use if Elastic Security is enabled (default: )
 
@@ -119,6 +123,12 @@ With timeline analysis mode:
 $ mft2es /path/to/your/$MFT --timeline --index=mft-timeline
 ```
 
+With tags for host identification:
+
+```bash
+$ mft2es /path/to/your/$MFT --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-analysis
+```
+
 Note: The current version does not verify the certificate.
 
 ## Appendix
@@ -131,6 +141,12 @@ Convert Windows Master File Table to a JSON file.
 
 ```bash
 $ mft2json /path/to/your/$MFT -o /path/to/output/target.json
+```
+
+With tags for host identification:
+
+```bash
+$ mft2json /path/to/your/$MFT --tags "WORKSTATION-1,DOMAIN-ABC" -o /path/to/output/target.json
 ```
 
 Convert Windows Master File Table to a Python List[dict] object.
@@ -290,8 +306,10 @@ This mode creates separate records for each timestamp type (M, A, C, B) from bot
         },
         "data": null
       }
-    }
+    },
+    "tags": ["mft", "WORKSTATION-1", "DOMAIN-ABC"]
   },
+  ...
 ]
 ```
 
@@ -301,62 +319,80 @@ This mode creates separate records for each timestamp type (M, A, C, B) from bot
 [
   {
     "@timestamp": "2007-06-30T12:50:52.252395Z",
-    "record_number": 0,
-    "mft": {
-      "header": {
-        "signature": [
-          70,
-          73,
-          76,
-          69
-        ],
-        "usa_offset": 48,
-        "usa_size": 3,
-        "metadata_transaction_journal": 77648146,
-        "sequence": 1,
-        "hard_link_count": 1,
-        "first_attribute_record_offset": 56,
-        "flags": "ALLOCATED",
-        "used_entry_size": 424,
-        "total_entry_size": 1024,
-        "base_reference": {
-          "entry": 0,
-          "sequence": 0
-        },
-        "first_attribute_id": 6
-      }
-    },
-    "attribute": {
-      "type": "StandardInformation",
-      "macb_type": "M",
-      "header": {
-        "record_length": 96,
-        "form_code": 0,
-        "residential_header": {
-          "index_flag": 0
-        },
-        "name_size": 0,
-        "name_offset": null,
-        "data_flags": "(empty)",
-        "instance": 0,
-        "name": ""
-      },
-      "data": {
-        "file_flags": "FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM",
-        "max_version": 0,
-        "version": 0,
-        "class_id": 0,
-        "owner_id": 0,
-        "security_id": 256,
-        "quota": 0,
-        "usn": 0
-      }
+    "event": {
+      "action": "timestamp-updated",
+      "category": "file",
+      "type": "change",
+      "provider": "mft"
     },
     "file": {
-      "path": "$MFT",
-      "name": "$MFT"
-    }
+      "name": "$MFT",
+      "path": "$MFT"
+    },
+    "windows": {
+      "mft": {
+        "record": {
+          "number": 0,
+          "name": "$MFT",
+          "path": "$MFT"
+        },
+        "header": {
+          "signature": [
+            70,
+            73,
+            76,
+            69
+          ],
+          "usa_offset": 48,
+          "usa_size": 3,
+          "metadata_transaction_journal": 77648146,
+          "sequence": 1,
+          "hard_link_count": 1,
+          "first_attribute_record_offset": 56,
+          "flags": "ALLOCATED",
+          "used_entry_size": 424,
+          "total_entry_size": 1024,
+          "base_reference": {
+            "entry": 0,
+            "sequence": 0
+          },
+          "first_attribute_id": 6
+        },
+        "attribute": {
+          "type": "StandardInformation",
+          "macb_type": "M",
+          "header": {
+            "record_length": 96,
+            "form_code": 0,
+            "residential_header": {
+              "index_flag": 0
+            },
+            "name_size": 0,
+            "name_offset": null,
+            "data_flags": "(empty)",
+            "instance": 0,
+            "name": ""
+          },
+          "data": {
+            "file_flags": "FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM",
+            "max_version": 0,
+            "version": 0,
+            "class_id": 0,
+            "owner_id": 0,
+            "security_id": 256,
+            "quota": 0,
+            "usn": 0
+          }
+        }
+      }
+    },
+    "tags": [
+      "mft",
+      "WORKSTATION-1",
+      "DOMAIN-ABC"
+    ]
   },
+  ...
 ]
 ````
 

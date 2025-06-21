@@ -55,7 +55,7 @@ def test__mft2json_convert(monkeypatch):
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "23ca44b6c79e715f176ea3fd8fecd6e2"
+    assert calc_md5(Path(path)) == "b3e228a56fd310dcbcb6ffc6e332cba9"
 
 def test__mft2json_convert_multiprocessing(monkeypatch):
     path = 'tests/cache/MFT-m.json'
@@ -63,7 +63,7 @@ def test__mft2json_convert_multiprocessing(monkeypatch):
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "23ca44b6c79e715f176ea3fd8fecd6e2"
+    assert calc_md5(Path(path)) == "b3e228a56fd310dcbcb6ffc6e332cba9"
 
 def test__mft2json_timeline_convert(monkeypatch):
     path = 'tests/cache/MFT-t.json'
@@ -71,7 +71,7 @@ def test__mft2json_timeline_convert(monkeypatch):
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "bf18072e7648cd2184846698a28d302b"
+    assert calc_md5(Path(path)) == "1ee34652cea1cfa8ca1f4936d6bca99a"
 
 def test__mft2json_timeline_convert_multiprocessing(monkeypatch):
     path = 'tests/cache/MFT-t-m.json'
@@ -79,4 +79,4 @@ def test__mft2json_timeline_convert_multiprocessing(monkeypatch):
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "bf18072e7648cd2184846698a28d302b"
+    assert calc_md5(Path(path)) == "1ee34652cea1cfa8ca1f4936d6bca99a"

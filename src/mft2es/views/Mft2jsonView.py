@@ -28,6 +28,11 @@ class Mft2jsonView(BaseView):
             action="store_true",
             help="Enable timeline analysis mode (separates records by type)",
         )
+        self.parser.add_argument(
+            "--tags",
+            default="",
+            help="Comma-separated tags to add to each record (e.g., 'WORKSTATION-1,DOMAIN-ABC')",
+        )
 
     def run(self):
         view = Mft2jsonView()
@@ -46,6 +51,7 @@ class Mft2jsonView(BaseView):
             multiprocess=self.args.multiprocess,
             chunk_size=self.args.size,
             timeline_mode=self.args.timeline,
+            tags=self.args.tags,
         ).export_json()
 
         view.log("Converted.", self.args.quiet)

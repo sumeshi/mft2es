@@ -77,18 +77,6 @@ def organize_attributes_by_type(record: dict) -> Dict[str, dict]:
     return attributes
 
 
-def extract_file_info(filepath: str) -> Dict[str, str]:
-    """Extract file information from filepath.
-
-    Args:
-        filepath (str): File full path
-
-    Returns:
-        Dict[str, str]: File information
-    """
-    return {"path": filepath, "name": filepath.split("/")[-1] if filepath else ""}
-
-
 def create_timeline_record(
     record: dict,
     attribute: dict,
@@ -96,6 +84,8 @@ def create_timeline_record(
     macb_type: str,
     timestamp_field: str,
     filepath: str,
+    mft_file_path: str,
+    tags: str = None,
 ) -> dict:
     """Create a single timeline record for MACB analysis.
 
@@ -105,35 +95,59 @@ def create_timeline_record(
         attr_type (str): Attribute type (StandardInformation or FileName)
         macb_type (str): MACB type (M, A, C, B)
         timestamp_field (str): Timestamp field name
-        filepath (str): File full path
+        filepath (str): File full path (record's file path)
+        mft_file_path (str): Path to the MFT file being processed
+        tags (str): Comma-separated string of additional tags
 
     Returns:
         dict: Timeline record
     """
+    # Parse tags from comma-separated string
+    additional_tags = (
+        [tag.strip() for tag in tags.split(",") if tag.strip()] if tags else []
+    )
+    base_tags = ["mft"] + additional_tags
+
     attr_data = attribute.get("data", {})
     record_header = record.get("header", {})
     attr_header = attribute.get("header", {})
 
     return {
         "@timestamp": attr_data.get(timestamp_field),
-        "record_number": record_header.get("record_number", 0),
-        "mft": {
-            "header": {k: v for k, v in record_header.items() if k != "record_number"}
+        "event": {
+            "action": "timestamp-updated",
+            "category": "file",
+            "type": "change",
+            "provider": "mft",
         },
-        "attribute": {
-            "type": attr_type,
-            "macb_type": macb_type,
-            "header": {k: v for k, v in attr_header.items() if k != "type_code"},
-            "data": {
-                k: v for k, v in attr_data.items() if k not in MACB_MAPPING.values()
+        "file": {
+            "name": mft_file_path.split("/")[-1] if mft_file_path else "",
+            "path": mft_file_path,
+        },
+        "windows": {
+            "mft": {
+                "record": {
+                    "number": record_header.get("record_number", 0),
+                    "name": filepath.split("/")[-1] if filepath else "",
+                    "path": filepath,
+                },
+                "header": {k: v for k, v in record_header.items() if k != "record_number"},
+                "attribute": {
+                    "type": attr_type,
+                    "macb_type": macb_type,
+                    "header": {k: v for k, v in attr_header.items() if k != "type_code"},
+                    "data": {
+                        k: v for k, v in attr_data.items() if k not in MACB_MAPPING.values()
+                    },
+                },
             },
         },
-        "file": extract_file_info(filepath),
+        "tags": base_tags
     }
 
 
 def create_macb_records_for_attribute(
-    record: dict, attribute: dict, attr_type: str, filepath: str
+    record: dict, attribute: dict, attr_type: str, filepath: str, mft_file_path: str, tags: str = None
 ) -> List[dict]:
     """Create MACB records for a single attribute.
 
@@ -141,7 +155,9 @@ def create_macb_records_for_attribute(
         record (dict): Original MFT record
         attribute (dict): Attribute data
         attr_type (str): Attribute type
-        filepath (str): File full path
+        filepath (str): File full path (record's file path)
+        mft_file_path (str): Path to the MFT file being processed
+        tags (str): Comma-separated string of additional tags
 
     Returns:
         List[dict]: MACB timeline records for the attribute
@@ -152,21 +168,23 @@ def create_macb_records_for_attribute(
     records = []
     for macb_type, timestamp_field in MACB_MAPPING.items():
         timeline_record = create_timeline_record(
-            record, attribute, attr_type, macb_type, timestamp_field, filepath
+            record, attribute, attr_type, macb_type, timestamp_field, filepath, mft_file_path, tags
         )
         records.append(timeline_record)
 
     return records
 
 
-def format_timeline_records(record: dict, filepath: str) -> List[dict]:
+def format_timeline_records(record: dict, filepath: str, mft_file_path: str, tags: str = None) -> List[dict]:
     """Format MFT record into timeline analysis records.
 
     Creates MACB timeline records for StandardInformation and FileName attributes.
 
     Args:
         record (dict): Single MFT record
-        filepath (str): File full path
+        filepath (str): File full path (record's file path)
+        mft_file_path (str): Path to the MFT file being processed
+        tags (str): Comma-separated string of additional tags
 
     Returns:
         List[dict]: Timeline records (MACB for StandardInformation and FileName)
@@ -178,23 +196,29 @@ def format_timeline_records(record: dict, filepath: str) -> List[dict]:
     for attr_type in TIMELINE_ATTRIBUTES:
         attribute = attributes.get(attr_type, {})
         macb_records = create_macb_records_for_attribute(
-            record, attribute, attr_type, filepath
+            record, attribute, attr_type, filepath, mft_file_path, tags
         )
         timeline_records.extend(macb_records)
 
     return timeline_records
 
 
-def format_standard_record(record: dict, filepath: str) -> dict:
+def format_standard_record(record: dict, filepath: str, tags: str = None) -> dict:
     """Format MFT record into standard format.
 
     Args:
         record (dict): Single MFT record
         filepath (str): File full path
+        tags (str): Comma-separated string of additional tags
 
     Returns:
         dict: Standard MFT record
     """
+    # Parse tags from comma-separated string
+    additional_tags = (
+        [tag.strip() for tag in tags.split(",") if tag.strip()] if tags else []
+    )
+    base_tags = ["mft"] + additional_tags
 
     attributes = {}
     for attribute in record.get("attributes"):
@@ -226,15 +250,19 @@ def format_standard_record(record: dict, filepath: str) -> dict:
                     hex(vnc)
                 )
 
+    # Add tags to the record
+    record["tags"] = base_tags
+
     return record
 
 
-def process_standard_by_chunk(records: List[str], rows: List[bytes]) -> List[dict]:
+def process_standard_by_chunk(records: List[str], rows: List[bytes], tags: str = None) -> List[dict]:
     """Process standard MFT records by chunk.
 
     Args:
         records (List[str]): chunk of MFT records(json).
         rows (List[bytes]): chunk of MFT records(csv).
+        tags (str): Comma-separated string of additional tags
 
     Returns:
         List[dict]: MFT records list.
@@ -248,12 +276,12 @@ def process_standard_by_chunk(records: List[str], rows: List[bytes]) -> List[dic
     record_list: List[dict] = orjson.loads(concatenated_json)
 
     return [
-        format_standard_record(record, filename)
+        format_standard_record(record, filename, tags)
         for record, filename in zip(record_list, filename_list)
     ]
 
 
-def process_timeline_by_chunk(records: List[str], rows: List[bytes]) -> List[dict]:
+def process_timeline_by_chunk(records: List[str], rows: List[bytes], mft_file_path: str, tags: str = None) -> List[dict]:
     """Perform timeline formatting for each chunk.
 
     Creates multiple specialized records per MFT entry for better analysis.
@@ -261,6 +289,8 @@ def process_timeline_by_chunk(records: List[str], rows: List[bytes]) -> List[dic
     Args:
         records (List[str]): chunk of MFT records(json).
         rows (List[bytes]): chunk of MFT records(csv).
+        mft_file_path (str): Path to the MFT file being processed
+        tags (str): Comma-separated string of additional tags
 
     Returns:
         List[dict]: Multiple specialized timeline records per MFT entry.
@@ -275,7 +305,7 @@ def process_timeline_by_chunk(records: List[str], rows: List[bytes]) -> List[dic
 
     timeline_records = []
     for record, filename in zip(record_list, filename_list):
-        timeline_records.extend(format_timeline_records(record, filename))
+        timeline_records.extend(format_timeline_records(record, filename, mft_file_path, tags))
 
     return timeline_records
 
@@ -287,7 +317,7 @@ class Mft2es(SafeMultiprocessingMixin):
         self.csvparser = PyMftParser(self.path.open(mode="rb"))
 
     def gen_timeline_records(
-        self, multiprocess: bool, chunk_size: int, timeline_mode: bool = False
+        self, multiprocess: bool, chunk_size: int, timeline_mode: bool = False, tags: str = None
     ) -> Generator:
         """Generates MFT records.
 
@@ -295,6 +325,7 @@ class Mft2es(SafeMultiprocessingMixin):
             multiprocess (bool): Flag to run multiprocessing.
             chunk_size (int): Size of the chunk to be processed for each process.
             timeline_mode (bool): Flag to enable timeline analysis mode.
+            tags (str): Comma-separated string of additional tags
 
         Yields:
             Generator: Yields List[dict].
@@ -303,24 +334,23 @@ class Mft2es(SafeMultiprocessingMixin):
         if multiprocess:
             # Use safe context for Python 3.13 compatibility
             ctx = self.get_multiprocessing_context()
+            
+            # Pre-generate chunks to get accurate count
+            json_chunks = list(generate_chunks(chunk_size, self.parser.entries_json()))
+            csv_chunks = list(generate_chunks(chunk_size, self.csvparser.entries_csv()))
+            
             if timeline_mode:
                 with ctx.Pool(self.get_cpu_count()) as pool:
                     results = pool.starmap_async(
                         process_timeline_by_chunk,
-                        zip(
-                            generate_chunks(chunk_size, self.parser.entries_json()),
-                            generate_chunks(chunk_size, self.csvparser.entries_csv()),
-                        ),
+                        [(json_chunk, csv_chunk, str(self.path), tags) for json_chunk, csv_chunk in zip(json_chunks, csv_chunks)],
                     )
                     yield list(chain.from_iterable(results.get(timeout=None)))
             else:
                 with ctx.Pool(self.get_cpu_count()) as pool:
                     results = pool.starmap_async(
                         process_standard_by_chunk,
-                        zip(
-                            generate_chunks(chunk_size, self.parser.entries_json()),
-                            generate_chunks(chunk_size, self.csvparser.entries_csv()),
-                        ),
+                        [(json_chunk, csv_chunk, tags) for json_chunk, csv_chunk in zip(json_chunks, csv_chunks)],
                     )
                     yield list(chain.from_iterable(results.get(timeout=None)))
         else:
@@ -334,8 +364,8 @@ class Mft2es(SafeMultiprocessingMixin):
                     buffer.clear()
                 else:
                     if timeline_mode:
-                        buffer.append(process_timeline_by_chunk(json, csv))
+                        buffer.append(process_timeline_by_chunk(json, csv, str(self.path), tags))
                     else:
-                        buffer.append(process_standard_by_chunk(json, csv))
+                        buffer.append(process_standard_by_chunk(json, csv, tags))
             else:
                 yield list(chain.from_iterable(buffer))

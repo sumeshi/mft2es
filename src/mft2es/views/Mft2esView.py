@@ -46,6 +46,11 @@ class Mft2esView(BaseView):
             action="store_true",
             help="Enable timeline analysis mode (separates records by type)",
         )
+        self.parser.add_argument(
+            "--tags",
+            default="",
+            help="Comma-separated tags to add to each record (e.g., 'WORKSTATION-1,DOMAIN-ABC')",
+        )
 
     def __list_mft_files(self, mft_files: List[str]) -> List[Path]:
         mft_path_list = list()
@@ -86,6 +91,7 @@ class Mft2esView(BaseView):
                 chunk_size=int(self.args.size),
                 logger=self.log,
                 timeline_mode=self.args.timeline,
+                tags=self.args.tags,
             ).bulk_import()
 
         view.log("Import completed.", self.args.quiet)

@@ -27,6 +27,7 @@ class Mft2esPresenter(object):
         chunk_size: int = 500,
         logger=None,
         timeline_mode: bool = False,
+        tags: str = "",
     ):
         self.input_path = input_path
         self.host = host
@@ -41,6 +42,7 @@ class Mft2esPresenter(object):
         self.chunk_size = chunk_size
         self.logger = logger
         self.timeline_mode = timeline_mode
+        self.tags = tags
 
     def mft2es(self):
         mft2es = Mft2es(self.input_path)
@@ -50,6 +52,7 @@ class Mft2esPresenter(object):
             multiprocess=self.multiprocess,
             chunk_size=self.chunk_size,
             timeline_mode=self.timeline_mode,
+            tags=self.tags,
         ):
             yield records
 
