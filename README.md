@@ -320,14 +320,21 @@ This mode creates separate records for each timestamp type (M, A, C, B) from bot
   {
     "@timestamp": "2007-06-30T12:50:52.252395Z",
     "event": {
-      "action": "timestamp-updated",
-      "category": "file",
-      "type": "change",
-      "provider": "mft"
+      "action": "mft-standardinformation-m",
+      "category": [
+        "file"
+      ],
+      "type": [
+        "change"
+      ],
+      "kind": "event",
+      "provider": "mft",
+      "module": "windows",
+      "dataset": "windows.mft"
     },
     "file": {
-      "name": "$MFT",
-      "path": "$MFT"
+      "name": "MFT",
+      "path": "/path/to/your/MFT"
     },
     "windows": {
       "mft": {
@@ -387,9 +394,7 @@ This mode creates separate records for each timestamp type (M, A, C, B) from bot
       }
     },
     "tags": [
-      "mft",
-      "WORKSTATION-1",
-      "DOMAIN-ABC"
+      "mft"
     ]
   },
   ...
