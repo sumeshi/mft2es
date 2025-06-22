@@ -3,12 +3,6 @@ description:
 globs: 
 alwaysApply: true
 ---
----
-description: Python development standards
-globs: ["**/*"]
-alwaysApply: true
----
-
 # Python Standards
 
 ## Language & Framework

@@ -3,12 +3,6 @@ description:
 globs: 
 alwaysApply: true
 ---
----
-description: Project-specific rules for mft2es
-globs: ["**/*"]
-alwaysApply: true
----
-
 # mft2es - Project Specific Rules
 
 ## Project Overview
