@@ -332,10 +332,6 @@ This mode creates separate records for each timestamp type (M, A, C, B) from bot
       "module": "windows",
       "dataset": "windows.mft"
     },
-    "file": {
-      "name": "MFT",
-      "path": "/path/to/your/MFT"
-    },
     "windows": {
       "mft": {
         "record": {
@@ -391,6 +387,11 @@ This mode creates separate records for each timestamp type (M, A, C, B) from bot
             "usn": 0
           }
         }
+      }
+    },
+    "log": {
+      "file": {
+        "path": "/path/to/your/MFT"
       }
     },
     "tags": [

@@ -123,10 +123,6 @@ def create_timeline_record(
             "module": "windows",
             "dataset": "windows.mft",
         },
-        "file": {
-            "name": mft_file_path.split("/")[-1] if mft_file_path else "",
-            "path": mft_file_path,
-        },
         "windows": {
             "mft": {
                 "record": {
@@ -151,6 +147,7 @@ def create_timeline_record(
                 },
             },
         },
+        "log": {"file": {"path": mft_file_path}},
         "tags": base_tags,
     }
 
