@@ -47,9 +47,9 @@ class Mft2esView(BaseView):
             help="Enable timeline analysis mode (separates records by type)",
         )
         self.parser.add_argument(
-            "--tags",
-            default="",
-            help="Comma-separated tags to add to each record (e.g., 'WORKSTATION-1,DOMAIN-ABC')",
+            "--no-verify-certs",
+            action="store_true",
+            help="Disable SSL/TLS certificate verification",
         )
 
     def __list_mft_files(self, mft_files: List[str]) -> List[Path]:
@@ -65,17 +65,34 @@ class Mft2esView(BaseView):
         return mft_path_list
 
     def run(self):
-        view = Mft2esView()
         mft_files = self.__list_mft_files(self.args.mft_files)
+        processed_count = 0
+        had_invalid_input = False
 
         if self.args.multiprocess:
-            view.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
+            self.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
 
         if self.args.timeline:
-            view.log("Timeline analysis mode enabled", self.args.quiet)
+            self.log("Timeline analysis mode enabled", self.args.quiet)
+
+        if not mft_files:
+            self.log("Error: no MFT files found.", self.args.quiet)
+            raise SystemExit(1)
 
         for mft_file in mft_files:
-            view.log(f"Currently Importing {mft_file}.", self.args.quiet)
+            if not mft_file.exists():
+                self.log(
+                    f"Warning: {mft_file} does not exist, skipping.", self.args.quiet
+                )
+                had_invalid_input = True
+                continue
+            if not mft_file.is_file():
+                self.log(
+                    f"Warning: {mft_file} is not a file, skipping.", self.args.quiet
+                )
+                had_invalid_input = True
+                continue
+            self.log(f"Currently Importing {mft_file}.", self.args.quiet)
 
             Mft2esPresenter(
                 input_path=mft_file,
@@ -92,13 +109,23 @@ class Mft2esView(BaseView):
                 logger=self.log,
                 timeline_mode=self.args.timeline,
                 tags=self.args.tags,
+                verify_certs=not self.args.no_verify_certs,
             ).bulk_import()
+            processed_count += 1
 
-        view.log("Import completed.", self.args.quiet)
+        if processed_count == 0:
+            self.log("Error: no valid MFT files were imported.", self.args.quiet)
+            raise SystemExit(1)
+
+        if had_invalid_input:
+            self.log("Import completed with skipped inputs.", self.args.quiet)
+            raise SystemExit(1)
+
+        self.log("Import completed.", self.args.quiet)
 
 
 def entry_point():
-    Mft2esView().run()
+    BaseView.run_entry_point(Mft2esView)
 
 
 if __name__ == "__main__":

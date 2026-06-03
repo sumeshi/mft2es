@@ -1,9 +1,8 @@
 # coding: utf-8
 import traceback
-from typing import List
 from pathlib import Path
+from typing import List, Optional, Union
 
-import orjson
 from tqdm import tqdm
 
 from mft2es.models.Mft2es import Mft2es
@@ -27,7 +26,8 @@ class Mft2esPresenter(object):
         chunk_size: int = 500,
         logger=None,
         timeline_mode: bool = False,
-        tags: str = "",
+        tags: Optional[Union[str, List[str]]] = None,
+        verify_certs: bool = True,
     ):
         self.input_path = input_path
         self.host = host
@@ -43,18 +43,22 @@ class Mft2esPresenter(object):
         self.logger = logger
         self.timeline_mode = timeline_mode
         self.tags = tags
+        self.verify_certs = verify_certs
 
     def mft2es(self):
-        mft2es = Mft2es(self.input_path)
-
-        # Timeline mode uses specialized record generation
-        for records in mft2es.gen_timeline_records(
-            multiprocess=self.multiprocess,
-            chunk_size=self.chunk_size,
-            timeline_mode=self.timeline_mode,
-            tags=self.tags,
-        ):
-            yield records
+        mft2es_instance = Mft2es(self.input_path)
+        try:
+            generator = mft2es_instance.gen_timeline_records(
+                multiprocess=self.multiprocess,
+                chunk_size=self.chunk_size,
+                timeline_mode=self.timeline_mode,
+                tags=self.tags,
+            )
+            if not self.is_quiet:
+                generator = tqdm(generator)
+            yield from generator
+        finally:
+            mft2es_instance.close()
 
     def bulk_import(self):
         es = ElasticsearchUtils(
@@ -63,6 +67,7 @@ class Mft2esPresenter(object):
             scheme=self.scheme,
             login=self.login,
             pwd=self.pwd,
+            verify_certs=self.verify_certs,
         )
 
         # Buffer for collecting results
@@ -78,7 +83,8 @@ class Mft2esPresenter(object):
                     total_failed.extend(failed)
                 batch_count += 1
 
-            except Exception:
+            except Exception as e:
+                total_failed.append({"batch": batch_count, "error": str(e)})
                 if self.logger:
                     self.logger("Error occurred during bulk indexing", self.is_quiet)
                 traceback.print_exc()

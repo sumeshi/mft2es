@@ -103,5 +103,10 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+.flake8
+
 MFT
 MFT.json
+
+.claude
+TASKS.md

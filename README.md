@@ -94,6 +94,10 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
 
 --pwd:
   The password associated with the provided login (default: )
+
+--no-verify-certs:
+  Disable SSL/TLS certificate verification
+  (default: False)
 ```
 
 ### Examples
@@ -129,7 +133,7 @@ With tags for host identification:
 $ mft2es /path/to/your/$MFT --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-analysis
 ```
 
-Note: The current version does not verify the certificate.
+By default, SSL/TLS certificates are verified. Use `--no-verify-certs` only when connecting to an Elasticsearch endpoint with a certificate you intentionally do not want to verify.
 
 ## Appendix
 

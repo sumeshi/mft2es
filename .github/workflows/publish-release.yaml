@@ -15,21 +15,12 @@ jobs:
         python-version: ['3.11']
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: install python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
-      - name: replace version
-        run: |
-          from pathlib import Path
-          version = [l for l in Path('pyproject.toml').read_text().splitlines() if 'version' in l][0].split(' ')[-1].strip('\"')
-          f = Path('src/mft2es/views/BaseView.py')
-          text = f.read_text().replace("get_version('mft2es')", f"\'{version}\'")
-          f.write_text(text)
-        shell: python
 
       - name: Install dependencies
         run: |
@@ -38,8 +29,8 @@ jobs:
       - name: get version
         id: get_version
         run: |
-          version=$(cat pyproject.toml | grep version | head -1 | awk -F '"' '{print $2}')
-          echo "version=$version" >> $GITHUB_ENV
+          version=$(python -c "ns={}; exec(open('src/mft2es/__about__.py').read(), ns); print(ns['__version__'])")
+          echo "version=$version" >> "$GITHUB_ENV"
         shell: bash
 
       - name: run python
@@ -66,7 +57,7 @@ jobs:
         id: create_tag
         if: startsWith(github.ref, 'refs/heads/master')
         run: |
-          version=$(cat pyproject.toml | grep version | head -1 | awk -F '"' '{print $2}')
+          version=$(python -c "ns={}; exec(open('src/mft2es/__about__.py').read(), ns); print(ns['__version__'])")
           git tag "v$version"
           git push origin "v$version"
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -96,21 +87,12 @@ jobs:
       version: ${{ needs.build-windows.outputs.version }}
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: install python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
-      - name: replace version
-        run: |
-          from pathlib import Path
-          version = [l for l in Path('pyproject.toml').read_text().splitlines() if 'version' in l][0].split(' ')[-1].strip('\"')
-          f = Path('src/mft2es/views/BaseView.py')
-          text = f.read_text().replace("get_version('mft2es')", f"\'{version}\'")
-          f.write_text(text)
-        shell: python
 
       - name: Install dependencies
         run: |

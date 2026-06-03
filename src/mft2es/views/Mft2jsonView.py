@@ -1,5 +1,6 @@
 # coding: utf-8
 from multiprocessing import cpu_count
+from pathlib import Path
 
 from mft2es.views.BaseView import BaseView
 from mft2es.presenters.Mft2jsonPresenter import Mft2jsonPresenter
@@ -28,21 +29,23 @@ class Mft2jsonView(BaseView):
             action="store_true",
             help="Enable timeline analysis mode (separates records by type)",
         )
-        self.parser.add_argument(
-            "--tags",
-            default="",
-            help="Comma-separated tags to add to each record (e.g., 'WORKSTATION-1,DOMAIN-ABC')",
-        )
 
     def run(self):
-        view = Mft2jsonView()
-        view.log(f"Converting {self.args.mft_file}.", self.args.quiet)
+        mft_path = Path(self.args.mft_file)
+        if not mft_path.exists():
+            self.log(f"Error: {mft_path} does not exist.", self.args.quiet)
+            raise SystemExit(1)
+        if not mft_path.is_file():
+            self.log(f"Error: {mft_path} is not a file.", self.args.quiet)
+            raise SystemExit(1)
+
+        self.log(f"Converting {self.args.mft_file}.", self.args.quiet)
 
         if self.args.multiprocess:
-            view.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
+            self.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
 
         if self.args.timeline:
-            view.log("Timeline analysis mode enabled", self.args.quiet)
+            self.log("Timeline analysis mode enabled", self.args.quiet)
 
         Mft2jsonPresenter(
             input_path=self.args.mft_file,
@@ -54,11 +57,11 @@ class Mft2jsonView(BaseView):
             tags=self.args.tags,
         ).export_json()
 
-        view.log("Converted.", self.args.quiet)
+        self.log("Converted.", self.args.quiet)
 
 
 def entry_point():
-    Mft2jsonView().run()
+    BaseView.run_entry_point(Mft2jsonView)
 
 
 if __name__ == "__main__":

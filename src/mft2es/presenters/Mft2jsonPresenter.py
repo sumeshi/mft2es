@@ -1,7 +1,7 @@
 # coding: utf-8
 from itertools import chain
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Union
 
 import orjson
 from tqdm import tqdm
@@ -19,7 +19,7 @@ class Mft2jsonPresenter(object):
         multiprocess: bool = False,
         chunk_size: int = 500,
         timeline_mode: bool = False,
-        tags: str = "",
+        tags: Optional[Union[str, List[str]]] = None,
     ):
         self.input_path = Path(input_path).resolve()
         self.output_path: Path = (
@@ -35,28 +35,28 @@ class Mft2jsonPresenter(object):
 
     def export_json(self) -> None:
         r = Mft2es(self.input_path)
-
-        # Use unified generation function with timeline mode parameter
-        generator = (
-            r.gen_timeline_records(
-                multiprocess=self.multiprocess,
-                chunk_size=self.chunk_size,
-                timeline_mode=self.timeline_mode,
-                tags=self.tags,
-            )
-            if self.is_quiet
-            else tqdm(
+        try:
+            generator = (
                 r.gen_timeline_records(
                     multiprocess=self.multiprocess,
                     chunk_size=self.chunk_size,
                     timeline_mode=self.timeline_mode,
                     tags=self.tags,
                 )
+                if self.is_quiet
+                else tqdm(
+                    r.gen_timeline_records(
+                        multiprocess=self.multiprocess,
+                        chunk_size=self.chunk_size,
+                        timeline_mode=self.timeline_mode,
+                        tags=self.tags,
+                    )
+                )
             )
-        )
-
-        self.output_path.write_text(
-            orjson.dumps(
-                list(chain.from_iterable(generator)), option=orjson.OPT_INDENT_2
-            ).decode("utf-8")
-        )
+            self.output_path.write_text(
+                orjson.dumps(
+                    list(chain.from_iterable(generator)), option=orjson.OPT_INDENT_2
+                ).decode("utf-8")
+            )
+        finally:
+            r.close()
