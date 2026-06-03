@@ -1,40 +1,39 @@
 # mft2es
 
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](LICENSE)
-[![PyPI version](https://badge.fury.io/py/mft2es.svg)](https://badge.fury.io/py/mft2es)
-[![pytest](https://github.com/sumeshi/mft2es/actions/workflows/test.yaml/badge.svg)](https://github.com/sumeshi/mft2es/actions/workflows/test.yaml)
+[![PyPI Version](https://img.shields.io/pypi/v/mft2es)](https://pypi.org/project/mft2es/)
 
 ![mft2es logo](https://gist.githubusercontent.com/sumeshi/c2f430d352ae763273faadf9616a29e5/raw/681a72cc27829497283409e19a78808c1297c2db/mft2es.svg)
 
-A library for fast parse & import of Windows Master File Table(\$MFT) into Elasticsearch.
+A command-line tool and Python library for parsing Windows Master File Table (`$MFT`) and importing the results into Elasticsearch.
 
-**mft2es** uses the Rust library [pymft-rs](https://github.com/omerbenamram/pymft-rs), making it much faster than traditional tools.
+**mft2es** leverages the Rust-based parser [pymft-rs](https://github.com/omerbenamram/pymft-rs), making it faster than pure-Python parsers in many cases.
+
 
 ## Usage
 
-**mft2es** can be executed from the command line or incorporated into a Python script.
+**mft2es** can be used as a standalone command-line tool or integrated directly into your Python scripts.
 
 ```bash
-$ mft2es /path/to/your/$MFT
+$ mft2es '/path/to/your/$MFT'
 ```
 
 ```python
 from mft2es import mft2es
 
-if __name__ == '__main__':
-  filepath = '/path/to/your/$MFT'
-  mft2es(filepath)
+mft2es("/path/to/your/$MFT")
 ```
+
 
 ### Arguments
 
-mft2es supports simultaneous import of multiple files.
+**mft2es** can process multiple files at once:
 
 ```bash
-$ mft2es file1/$MFT file2/$MFT file3/$MFT
+$ mft2es 'file1/$MFT' 'file2/$MFT' 'file3/$MFT'
 ```
 
-It also allows recursive import from the specified directory.
+mft2es can recursively process all `MFT` and `$MFT` files under a specified directory:
 
 ```bash
 $ tree .
@@ -47,6 +46,7 @@ mftfiles/
 
 $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files.
 ```
+
 
 ### Options
 
@@ -64,7 +64,7 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   (default: False)
 
 --size:
-  Chunk size for processing (default: 500)
+  Number of records to process per chunk (default: 500)
 
 --host:
   Elasticsearch host address (default: localhost)
@@ -90,14 +90,13 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   (e.g., hostname, domain name) (default: )
 
 --login:
-  The login to use if Elastic Security is enabled (default: )
+  Username for Elasticsearch authentication
 
 --pwd:
-  The password associated with the provided login (default: )
+  Password for Elasticsearch authentication
 
 --no-verify-certs:
-  Disable SSL/TLS certificate verification
-  (default: False)
+  Disable TLS certificate verification for Elasticsearch connections (default: False)
 ```
 
 ### Examples
@@ -105,73 +104,70 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
 When using from the command line:
 
 ```bash
-$ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foobar --size=500
+$ mft2es '/path/to/your/$MFT' --host=localhost --port=9200 --index=foobar --size=500
 ```
 
 When using from a Python script:
 
 ```python
-if __name__ == '__main__':
-    mft2es('/path/to/your/$MFT', host='localhost', port=9200, index='foobar', size=500)
+mft2es("/path/to/your/$MFT", host="localhost", port=9200, index="foobar", size=500)
 ```
 
 With credentials for Elastic Security:
 
 ```bash
-$ mft2es /path/to/your/$MFT --host=localhost --port=9200 --index=foobar --login=elastic --pwd=******
+$ mft2es '/path/to/your/$MFT' --host=localhost --port=9200 --index=foobar --login=elastic --pwd=******
 ```
 
 With timeline analysis mode:
 
 ```bash
-$ mft2es /path/to/your/$MFT --timeline --index=mft-timeline
+$ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
 ```
 
 With tags for host identification:
 
 ```bash
-$ mft2es /path/to/your/$MFT --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-analysis
+$ mft2es '/path/to/your/$MFT' --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-analysis
 ```
 
-By default, SSL/TLS certificates are verified. Use `--no-verify-certs` only when connecting to an Elasticsearch endpoint with a certificate you intentionally do not want to verify.
+> [!WARNING]
+> TLS certificate verification is enabled by default for Elasticsearch connections. Use `--no-verify-certs` only when connecting to a trusted cluster with self-signed or otherwise unverifiable certificates.
+
 
 ## Appendix
 
-### Mft2json
+### mft2json
 
-An additional feature: :sushi: :sushi: :sushi:
-
-Convert Windows Master File Table to a JSON file.
+**mft2es** also includes `mft2json`, a command-line tool for converting Windows Master File Table records into JSON files. :sushi: :sushi: :sushi:
 
 ```bash
-$ mft2json /path/to/your/$MFT -o /path/to/output/target.json
+$ mft2json '/path/to/your/$MFT' -o /path/to/output/target.json
 ```
 
 With tags for host identification:
 
 ```bash
-$ mft2json /path/to/your/$MFT --tags "WORKSTATION-1,DOMAIN-ABC" -o /path/to/output/target.json
+$ mft2json '/path/to/your/$MFT' --tags "WORKSTATION-1,DOMAIN-ABC" -o /path/to/output/target.json
 ```
 
-Convert Windows Master File Table to a Python List[dict] object.
+You can also convert `$MFT` records directly into a Python List[dict] object:
 
 ```python
 from mft2es import mft2json
 
-if __name__ == '__main__':
-  filepath = '/path/to/your/$MFT'
-  result: List[dict] = mft2json(filepath)
+result: List[dict] = mft2json("/path/to/your/$MFT")
 ```
+
 
 ### Timeline Analysis
 
-mft2es supports timeline analysis mode that creates MACB (Modified, Accessed, Created, Birth) timeline records for forensic investigation.
+mft2es supports timeline analysis mode that creates MACB (Modified, Accessed, Changed, Birth) timeline records for forensic investigation.
 
 ```bash
-$ mft2es /path/to/your/$MFT --timeline --index=mft-timeline
+$ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
 ```
 
-This mode creates separate records for each timestamp type (M, A, C, B) from both StandardInformation and FileName attributes, making it easier to analyze file system activity over time.
 
 ## Output Format Examples
 
@@ -404,19 +400,28 @@ This mode creates separate records for each timestamp type (M, A, C, B) from bot
   },
   ...
 ]
-````
+```
+
 
 ## Installation
 
-### from PyPI
+### From PyPI
 
 ```bash
 $ pip install mft2es
 ```
 
-### from GitHub Releases
 
-The version compiled into a binary using Nuitka is also available for use.
+### With uv
+
+```bash
+$ uv add mft2es
+```
+
+
+### From GitHub Releases
+
+Standalone binaries built with Nuitka are available from GitHub Releases for systems without a Python environment.
 
 ```bash
 $ chmod +x ./mft2es
@@ -427,21 +432,56 @@ $ ./mft2es {{options...}}
 > mft2es.exe {{options...}}
 ```
 
+
 ## Contributing
 
-The source code for mft2es is hosted on GitHub. You can download, fork, and review it from this repository: https://github.com/sumeshi/mft2es.
+The source code for **mft2es** is hosted on GitHub: https://github.com/sumeshi/mft2es.
 Please report issues and feature requests. :sushi: :sushi: :sushi:
+
 
 ## Included in
 
-- [Tsurugi Linux [Lab] 2022 - 2024](https://tsurugi-linux.org/) - DFIR Linux distribution
+- [Tsurugi Linux [Lab]](https://tsurugi-linux.org/) — included in selected releases.
 
 Thank you for your interest in mft2es!
 
 ## License
 
-mft2es is released under the [MIT](https://github.com/sumeshi/mft2es/blob/master/LICENSE) License.
+Released under the [MIT](LICENSE) License.
 
-Powered by following libraries:
-- [pymft-rs](https://github.com/omerbenamram/pymft-rs)
-- [Nuitka](https://github.com/Nuitka/Nuitka)
+
+## Third-party licenses
+
+The standalone binaries distributed via GitHub Releases may bundle the following third-party libraries.
+These libraries remain under their original licenses.
+
+### Apache-2.0
+
+- [elasticsearch-py / elasticsearch](https://github.com/elastic/elasticsearch-py) — licensed under the Apache License 2.0.
+  - Bundled version: `elasticsearch==9.4.1`
+  - License text: https://github.com/elastic/elasticsearch-py/blob/main/LICENSE
+
+### MIT
+
+- [mft / pymft-rs](https://github.com/omerbenamram/pymft-rs) — licensed under the MIT License.
+  - Bundled version: `mft==0.6.1`
+  - License text: https://github.com/omerbenamram/pymft-rs/blob/master/pyproject.toml
+
+- [urllib3](https://github.com/urllib3/urllib3) — licensed under the MIT License.
+  - Bundled version: `urllib3==2.6.3`
+  - License text: https://github.com/urllib3/urllib3/blob/main/LICENSE.txt
+
+### Apache-2.0 OR MIT, with MPL-2.0 components
+
+- [orjson](https://github.com/ijl/orjson) — licensed under Apache-2.0 OR MIT, and contains source code licensed under MPL-2.0.
+  - Bundled version: `orjson==3.11.9`
+  - License text:
+    - https://github.com/ijl/orjson/blob/master/LICENSE-APACHE
+    - https://github.com/ijl/orjson/blob/master/LICENSE-MIT
+    - https://github.com/ijl/orjson/blob/master/LICENSE-MPL-2.0
+
+### MIT and MPL-2.0
+
+- [tqdm](https://github.com/tqdm/tqdm) — licensed under MIT, with MPL-2.0-covered files/components.
+  - Bundled version: `tqdm==4.67.3`
+  - License text: https://github.com/tqdm/tqdm/blob/master/LICENCE
