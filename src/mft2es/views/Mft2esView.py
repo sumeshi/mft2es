@@ -16,40 +16,52 @@ class Mft2esView(BaseView):
 
     def define_options(self):
         self.parser.add_argument(
+            "--ca-certs",
+            default=None,
+            help="Path to a CA certificate bundle for TLS verification.",
+        )
+        self.parser.add_argument(
             "mft_files",
             nargs="+",
             type=str,
-            help="Windows MFT or directories containing them. (filename must be set 'MFT', or '$MFT')",
+            help=(
+                "Input MFT files or directories. Files are identified by the "
+                "names MFT or $MFT."
+            ),
         )
 
         self.parser.add_argument(
-            "--host", default="localhost", help="ElasticSearch host"
+            "--host", default="localhost", help="Elasticsearch host."
         )
         self.parser.add_argument(
-            "--port", default=9200, help="ElasticSearch port number"
+            "--port", default=9200, type=int, help="Elasticsearch port."
         )
-        self.parser.add_argument("--index", default="mft2es", help="Index name")
+        self.parser.add_argument("--index", default="mft2es", help="Elasticsearch index name.")
         self.parser.add_argument(
-            "--scheme", default="http", help="Scheme to use (http, https)"
-        )
-        self.parser.add_argument(
-            "--pipeline", default="", help="Ingest pipeline to use"
+            "--scheme", default="http", help="Connection scheme (http or https)."
         )
         self.parser.add_argument(
-            "--login", default="", help="Login to use to connect to Elastic database"
+            "--pipeline", default="", help="Elasticsearch ingest pipeline to use."
         )
         self.parser.add_argument(
-            "--pwd", default="", help="Password associated with the login"
+            "--login",
+            default="",
+            help="Username for Elasticsearch authentication.",
+        )
+        self.parser.add_argument(
+            "--pwd",
+            default="",
+            help="Password for Elasticsearch authentication.",
         )
         self.parser.add_argument(
             "--timeline",
             action="store_true",
-            help="Enable timeline analysis mode (separates records by type)",
+            help="Enable timeline analysis mode (separate records by type).",
         )
         self.parser.add_argument(
             "--no-verify-certs",
             action="store_true",
-            help="Disable SSL/TLS certificate verification",
+            help="Disable TLS certificate verification.",
         )
 
     def __list_mft_files(self, mft_files: List[str]) -> List[Path]:
@@ -70,7 +82,7 @@ class Mft2esView(BaseView):
         had_invalid_input = False
 
         if self.args.multiprocess:
-            self.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
+            self.log(f"Multiprocessing enabled ({cpu_count()} workers).", self.args.quiet)
 
         if self.args.timeline:
             self.log("Timeline analysis mode enabled", self.args.quiet)
@@ -82,22 +94,23 @@ class Mft2esView(BaseView):
         for mft_file in mft_files:
             if not mft_file.exists():
                 self.log(
-                    f"Warning: {mft_file} does not exist, skipping.", self.args.quiet
+                    f"Warning: {mft_file} does not exist; skipping.", self.args.quiet
                 )
                 had_invalid_input = True
                 continue
             if not mft_file.is_file():
                 self.log(
-                    f"Warning: {mft_file} is not a file, skipping.", self.args.quiet
+                    f"Warning: {mft_file} is not a regular file; skipping.", self.args.quiet
                 )
                 had_invalid_input = True
                 continue
-            self.log(f"Currently Importing {mft_file}.", self.args.quiet)
+            self.log(f"Importing {mft_file}...", self.args.quiet)
 
             Mft2esPresenter(
                 input_path=mft_file,
                 host=self.args.host,
-                port=int(self.args.port),
+                ca_certs=self.args.ca_certs,
+                port=self.args.port,
                 index=self.args.index,
                 scheme=self.args.scheme,
                 pipeline=self.args.pipeline,
@@ -118,10 +131,10 @@ class Mft2esView(BaseView):
             raise SystemExit(1)
 
         if had_invalid_input:
-            self.log("Import completed with skipped inputs.", self.args.quiet)
+            self.log("Import completed with some inputs skipped.", self.args.quiet)
             raise SystemExit(1)
 
-        self.log("Import completed.", self.args.quiet)
+        self.log("Import completed successfully.", self.args.quiet)
 
 
 def entry_point():

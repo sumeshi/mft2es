@@ -5,6 +5,13 @@ from abc import ABCMeta, abstractmethod
 from mft2es.__about__ import __version__
 
 
+def positive_int(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
+
+
 class BaseView(metaclass=ABCMeta):
 
     def __init__(self):
@@ -19,25 +26,28 @@ class BaseView(metaclass=ABCMeta):
             "--quiet",
             "-q",
             action="store_true",
-            help="flag to suppress standard output.",
+            help="Suppress standard output.",
         )
         self.parser.add_argument(
             "--multiprocess",
             "-m",
             action="store_true",
-            help="flag to run multiprocessing.",
+            help="Enable multiprocessing.",
         )
         self.parser.add_argument(
             "--size",
             "-s",
-            type=int,
+            type=positive_int,
             default=500,
-            help="size of the chunk to be processed for each process.",
+            help="Number of records to process in each chunk.",
         )
         self.parser.add_argument(
             "--tags",
             default="",
-            help="Comma-separated tags to add to each record (e.g., 'WORKSTATION-1,DOMAIN-ABC')",
+            help=(
+                "Comma-separated tags to add to each record "
+                "(e.g., WORKSTATION-1, DOMAIN-ABC)."
+            ),
         )
 
     @abstractmethod

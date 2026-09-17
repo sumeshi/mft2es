@@ -15,34 +15,41 @@ class Mft2jsonView(BaseView):
 
     def define_options(self):
         self.parser.add_argument(
-            "mft_file", type=str, help="Windows MFT file to input."
+            "--format", choices=("json", "jsonl", "ndjson"), default="json",
+            help=(
+                "Output format (default: json). "
+                "JSONL/NDJSON writes one record per line."
+            ),
+        )
+        self.parser.add_argument(
+            "mft_file", type=str, help="Input MFT file."
         )
         self.parser.add_argument(
             "--output-file",
             "-o",
             type=str,
             default="",
-            help="json file path to output.",
+            help="Output file path.",
         )
         self.parser.add_argument(
             "--timeline",
             action="store_true",
-            help="Enable timeline analysis mode (separates records by type)",
+            help="Enable timeline analysis mode (separate records by type).",
         )
 
     def run(self):
         mft_path = Path(self.args.mft_file)
         if not mft_path.exists():
-            self.log(f"Error: {mft_path} does not exist.", self.args.quiet)
+            self.log(f"Error: input path does not exist: {mft_path}", self.args.quiet)
             raise SystemExit(1)
         if not mft_path.is_file():
-            self.log(f"Error: {mft_path} is not a file.", self.args.quiet)
+            self.log(f"Error: input path is not a regular file: {mft_path}", self.args.quiet)
             raise SystemExit(1)
 
         self.log(f"Converting {self.args.mft_file}.", self.args.quiet)
 
         if self.args.multiprocess:
-            self.log(f"Multi-Process: {cpu_count()}", self.args.quiet)
+            self.log(f"Multiprocessing enabled ({cpu_count()} workers).", self.args.quiet)
 
         if self.args.timeline:
             self.log("Timeline analysis mode enabled", self.args.quiet)
@@ -55,9 +62,10 @@ class Mft2jsonView(BaseView):
             chunk_size=self.args.size,
             timeline_mode=self.args.timeline,
             tags=self.args.tags,
+            output_format=self.args.format,
         ).export_json()
 
-        self.log("Converted.", self.args.quiet)
+        self.log("Conversion completed successfully.", self.args.quiet)
 
 
 def entry_point():

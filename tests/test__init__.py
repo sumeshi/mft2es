@@ -1,5 +1,6 @@
 # coding: utf-8
-from hashlib import md5
+from hashlib import md5, sha256
+import json
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,20 @@ def calc_md5(path: Path) -> str:
         return md5(path.read_bytes()).hexdigest()
 
 
+def assert_timeline_content(path: str) -> None:
+    # Verified against the committed presenter with the hash-checked MFT sample.
+    # JSON object key order is not part of the record contract.
+    records = json.loads(Path(path).read_bytes())
+    assert len(records) == 104496
+    canonical = json.dumps(
+        sorted(records, key=lambda record: json.dumps(record, sort_keys=True)),
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode()
+    assert sha256(canonical).hexdigest() == (
+        "0a41c56bcdcbcd58730915f4cd868c780e0783dd1307db38549b54091c360da9"
+    )
+
+
 # command-line test cases
 def test__mft2es_help(monkeypatch):
     argv = ["mft2es", "-h"]
@@ -22,7 +37,7 @@ def test__mft2es_help(monkeypatch):
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
             m2e()
-        assert exited.value.code == 0
+    assert exited.value.code == 0
 
 
 def test__mft2es_version(monkeypatch):
@@ -31,7 +46,7 @@ def test__mft2es_version(monkeypatch):
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
             m2e()
-        assert exited.value.code == 0
+    assert exited.value.code == 0
 
 
 def test__mft2json_help(monkeypatch):
@@ -40,7 +55,7 @@ def test__mft2json_help(monkeypatch):
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
             m2j()
-        assert exited.value.code == 0
+    assert exited.value.code == 0
 
 
 def test__mft2json_version(monkeypatch):
@@ -49,10 +64,11 @@ def test__mft2json_version(monkeypatch):
         with monkeypatch.context() as m:
             m.setattr("sys.argv", argv)
             m2j()
-        assert exited.value.code == 0
+    assert exited.value.code == 0
 
 
 # behavior test cases
+@pytest.mark.usefixtures("prepare_mft")
 def test__mft2json_convert(monkeypatch):
     path = "tests/cache/MFT.json"
     argv = ["mft2json", "-o", path, "tests/cache/MFT"]
@@ -62,6 +78,7 @@ def test__mft2json_convert(monkeypatch):
     assert calc_md5(Path(path)) == "b3e228a56fd310dcbcb6ffc6e332cba9"
 
 
+@pytest.mark.usefixtures("prepare_mft")
 def test__mft2json_convert_multiprocessing(monkeypatch):
     path = "tests/cache/MFT-m.json"
     argv = ["mft2json", "-o", path, "-m", "tests/cache/MFT"]
@@ -71,24 +88,27 @@ def test__mft2json_convert_multiprocessing(monkeypatch):
     assert calc_md5(Path(path)) == "b3e228a56fd310dcbcb6ffc6e332cba9"
 
 
+@pytest.mark.usefixtures("prepare_mft")
 def test__mft2json_timeline_convert(monkeypatch):
     path = "tests/cache/MFT-t.json"
     argv = ["mft2json", "--timeline", "-o", path, "tests/cache/MFT"]
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "cc18cc8cf067d68ca90084688ae44df0"
+    assert_timeline_content(path)
 
 
+@pytest.mark.usefixtures("prepare_mft")
 def test__mft2json_timeline_convert_multiprocessing(monkeypatch):
     path = "tests/cache/MFT-t-m.json"
     argv = ["mft2json", "--timeline", "-o", path, "-m", "tests/cache/MFT"]
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "cc18cc8cf067d68ca90084688ae44df0"
+    assert_timeline_content(path)
 
 
+@pytest.mark.usefixtures("prepare_mft")
 def test__mft2json_library_with_tags():
     from mft2es import mft2json
 

@@ -60,7 +60,7 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   (default: False)
 
 --multiprocess, -m:
-  Enable multiprocessing for faster execution
+  Enable multiprocessing for faster processing.
   (default: False)
 
 --size:
@@ -79,10 +79,10 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   Protocol scheme to use (http or https) (default: http)
 
 --pipeline:
-  Elasticsearch Ingest Pipeline to use (default: )
+  Elasticsearch ingest pipeline to use (default: )
 
 --timeline:
-  Enable timeline analysis mode for MACB format
+  Enable MACB timeline analysis mode
   (default: False)
 
 --tags:
@@ -96,7 +96,10 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   Password for Elasticsearch authentication
 
 --no-verify-certs:
-  Disable TLS certificate verification for Elasticsearch connections (default: False)
+  Disable TLS certificate verification (default: False)
+
+--ca-certs:
+  Path to a CA certificate bundle for TLS verification (default: None)
 ```
 
 ### Examples
@@ -113,7 +116,7 @@ When using from a Python script:
 mft2es("/path/to/your/$MFT", host="localhost", port=9200, index="foobar", size=500)
 ```
 
-With credentials for Elastic Security:
+With Elasticsearch authentication:
 
 ```bash
 $ mft2es '/path/to/your/$MFT' --host=localhost --port=9200 --index=foobar --login=elastic --pwd=******
@@ -132,7 +135,10 @@ $ mft2es '/path/to/your/$MFT' --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-ana
 ```
 
 > [!WARNING]
-> TLS certificate verification is enabled by default for Elasticsearch connections. Use `--no-verify-certs` only when connecting to a trusted cluster with self-signed or otherwise unverifiable certificates.
+> TLS certificate verification is enabled by default. Use `--no-verify-certs` only
+> when connecting to a trusted cluster with a self-signed or otherwise
+> unverifiable certificate. Use `--ca-certs /path/to/ca.pem` to provide a
+> private CA bundle while keeping verification enabled.
 
 
 ## Appendix
@@ -145,18 +151,26 @@ $ mft2es '/path/to/your/$MFT' --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-ana
 $ mft2json '/path/to/your/$MFT' -o /path/to/output/target.json
 ```
 
+`mft2json` also supports line-delimited output. `--format jsonl` (or `ndjson`)
+writes one record per line without holding the entire dataset in memory. When
+no output path is specified, the default extension is `.jsonl`:
+
+```bash
+$ mft2json '/path/to/your/$MFT' --format jsonl
+```
+
 With tags for host identification:
 
 ```bash
 $ mft2json '/path/to/your/$MFT' --tags "WORKSTATION-1,DOMAIN-ABC" -o /path/to/output/target.json
 ```
 
-You can also convert `$MFT` records directly into a Python List[dict] object:
+You can also convert `$MFT` records directly into a Python `list[dict]`:
 
 ```python
 from mft2es import mft2json
 
-result: List[dict] = mft2json("/path/to/your/$MFT")
+result: list[dict] = mft2json("/path/to/your/$MFT")
 ```
 
 

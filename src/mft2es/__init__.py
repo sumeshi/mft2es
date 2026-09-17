@@ -24,48 +24,47 @@ def mft2es(
     additional_tags: Optional[List[str]] = None,
     verify_certs: bool = True,
 ) -> None:
-    """Fast import of Windows MFT into Elasticsearch.
+    """Import Windows MFT records into Elasticsearch.
     Args:
         input_path (str):
-            Windows MFTs to import into Elasticsearch.
+            Windows MFT files to import into Elasticsearch.
 
         host (str, optional):
             Elasticsearch host address. Defaults to "localhost".
 
         port (int, optional):
-            Elasticsearch port number. Defaults to 9200.
+            Elasticsearch port. Defaults to 9200.
 
         index (str, optional):
             Name of the index to create. Defaults to "mft2es".
 
         scheme (str, optional):
-            Elasticsearch address scheme. Defaults to "http".
+            Connection scheme. Defaults to "http".
 
         pipeline (str, optional):
-            Elasticsearch Ingest Pipeline. Defaults to "".
+            Elasticsearch ingest pipeline. Defaults to "".
 
         login (str, optional):
-            Elasticsearch login to connect into.
+            Elasticsearch username.
 
         pwd (str, optional):
-            Elasticsearch password associated with the login provided.
+            Password for Elasticsearch authentication.
 
         multiprocess (bool, optional):
-            Flag to run multiprocessing.
+            Enable multiprocessing.
 
         chunk_size (int, optional):
-            Size of the chunk to be processed for each process.
+            Number of records to process in each chunk.
 
         timeline_mode (bool, optional):
-            Enable timeline analysis mode - creates specialized records
-            for Standard Information, Filename, and attributes.
+            Enable timeline analysis mode. This creates specialized records
+            for Standard Information and FileName attributes.
 
         additional_tags (Optional[List[str]], optional):
-            Comma-separated tags as a list to add to each record
-            (e.g., ['WORKSTATION-1', 'DOMAIN-ABC']).
+            Tags to add to each record.
 
         verify_certs (bool, optional):
-            Verify SSL/TLS certificates when connecting to Elasticsearch.
+            Verify TLS certificates when connecting to Elasticsearch.
     """
 
     Mft2esPresenter(
@@ -93,16 +92,15 @@ def mft2json(
     timeline_mode: bool = False,
     additional_tags: Optional[List[str]] = None,
 ) -> List[dict]:
-    """Convert Windows MFT to List[dict].
+    """Convert a Windows MFT file to a list of dictionaries.
 
     Args:
         filepath (str): Input MFT file.
         multiprocess (bool): Flag to run multiprocessing.
-        chunk_size (int): Size of the chunk to be processed for each process.
-        timeline_mode (bool): Enable timeline analysis mode - creates specialized records.
+        chunk_size (int): Number of records to process in each chunk.
+        timeline_mode (bool): Enable timeline analysis mode.
         additional_tags (Optional[List[str]], optional):
-            Comma-separated tags as a list to add to each record
-            (e.g., ['WORKSTATION-1', 'DOMAIN-ABC']).
+            Tags to add to each record.
 
     Note:
         Since the content of the file is loaded into memory at once,
