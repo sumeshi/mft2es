@@ -40,17 +40,20 @@ jobs:
           uv run mft2json -h
           uv run mft2json -v
       
+      - name: Collect runtime licenses
+        run: uv run python .github/collect_runtime_licenses.py dist/LICENSES.txt
+
       - name: build
         run: |
-          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2es-windows-x64-v$env:version.exe --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
-          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2json-windows-x64-v$env:version.exe --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
+          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2es --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
+          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2json --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
       
       - name: verify
         run: |
-          dist/mft2es-windows-x64-v$version.exe -h
-          dist/mft2es-windows-x64-v$version.exe -v
-          dist/mft2json-windows-x64-v$version.exe -h
-          dist/mft2json-windows-x64-v$version.exe -v
+          dist/mft2es.exe -h
+          dist/mft2es.exe -v
+          dist/mft2json.exe -h
+          dist/mft2json.exe -v
         shell: bash
       
       - name: create tag
@@ -65,13 +68,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
 
+      - name: Bundle release assets
+        run: |
+          bundle="dist/mft2es-windows-x64-v${{ steps.create_tag.outputs.version }}"
+          mkdir -p "$bundle"
+          mv dist/mft2es.exe "$bundle/mft2es.exe"
+          mv dist/mft2json.exe "$bundle/mft2json.exe"
+          cp dist/LICENSES.txt "$bundle/LICENSES.txt"
+          python -c "import shutil; shutil.make_archive(r'$bundle', 'zip', root_dir=r'$bundle')"
+        shell: bash
+
       - name: create release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.create_tag.outputs.version }}
           files: |
-            dist/mft2es-windows-x64-v${{ env.version }}.exe
-            dist/mft2json-windows-x64-v${{ env.version }}.exe
+            dist/mft2es-windows-x64-v${{ steps.create_tag.outputs.version }}.zip
           name: Release v${{ steps.create_tag.outputs.version }}
           body: 'This release was automatically created by GitHub Actions.'
         env:
@@ -106,25 +118,37 @@ jobs:
           uv run mft2json -h
           uv run mft2json -v
 
+      - name: Collect runtime licenses
+        run: uv run python .github/collect_runtime_licenses.py dist/LICENSES.txt
+
       - name: build
         run: |
           pip install nuitka
-          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2es-linux-x64-v$version --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
-          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2json-linux-x64-v$version --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
+          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2es --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
+          uv run python -m nuitka --standalone --onefile --follow-imports -o mft2json --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
       
       - name: verify
         run: |
-          dist/mft2es-linux-x64-v$version -h
-          dist/mft2es-linux-x64-v$version -v
-          dist/mft2json-linux-x64-v$version -h
-          dist/mft2json-linux-x64-v$version -v
+          dist/mft2es -h
+          dist/mft2es -v
+          dist/mft2json -h
+          dist/mft2json -v
+
+      - name: Bundle release assets
+        run: |
+          bundle="dist/mft2es-linux-x64-v${{ needs.build-windows.outputs.version }}"
+          mkdir -p "$bundle"
+          mv dist/mft2es "$bundle/mft2es"
+          mv dist/mft2json "$bundle/mft2json"
+          cp dist/LICENSES.txt "$bundle/LICENSES.txt"
+          python -c "import shutil; shutil.make_archive(r'$bundle', 'zip', root_dir=r'$bundle')"
+        shell: bash
 
       - name: upload asset to release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.build-windows.outputs.version }}
           files: |
-            dist/mft2es-linux-x64-v${{ env.version }}
-            dist/mft2json-linux-x64-v${{ env.version }}
+            dist/mft2es-linux-x64-v${{ needs.build-windows.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
