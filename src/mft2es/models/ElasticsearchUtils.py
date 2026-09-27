@@ -1,6 +1,7 @@
 # coding: utf-8
 from typing import Iterable
 from hashlib import sha1
+from copy import deepcopy
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -53,10 +54,27 @@ class ElasticsearchUtils(object):
 
         def actions():
             for record in records:
+                source = deepcopy(record)
+                data = record.get("attributes", {}).get("DATA", {}).get("data")
+                if isinstance(data, str):
+                    # Preserve local output and IDs while making resident and
+                    # non-resident DATA compatible with one object mapping.
+                    source["attributes"]["DATA"]["data"] = {"resident_data": data}
+                # VCN values are unsigned 64-bit, including sentinel values
+                # beyond Elasticsearch's signed long range. Apply the existing
+                # DATA/BITMAP hex convention to every attribute on ES output.
+                attributes = source.get("attributes", {}).values()
+                if "windows" in source:
+                    attributes = [source["windows"]["mft"]["attribute"]]
+                for attribute in attributes:
+                    header = attribute.get("header", {}).get("residential_header", {})
+                    for field in ("vnc_first", "vnc_last"):
+                        if isinstance(header.get(field), int):
+                            header[field] = hex(header[field])
                 event = {
                     "_id": self.calc_hash(record),
                     "_index": index_name,
-                    "_source": record,
+                    "_source": source,
                 }
                 if pipeline != "":
                     event["pipeline"] = pipeline

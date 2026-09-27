@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Generator, Iterable, List, Optional, Sequence, Union
 from itertools import islice
 import multiprocessing as mp
+from collections import deque
 
 import orjson
 from mft import PyMftParser
@@ -265,17 +266,24 @@ class Mft2es(SafeMultiprocessingMixin):
     ) -> Generator:
         if multiprocess:
             ctx = self.get_multiprocessing_context()
-            with ctx.Pool(self.get_cpu_count()) as pool:
-                yield from pool.imap(
-                    _mp_worker,
-                    (
-                        (j, c, str(self.path), timeline_mode, tags)
-                        for j, c in zip(
-                            generate_chunks(chunk_size, self.parser.entries_json()),
-                            generate_chunks(chunk_size, self.csvparser.entries_csv()),
-                        )
-                    ),
-                )
+            workers = self.get_cpu_count()
+            with ctx.Pool(workers) as pool:
+                # imap consumes its iterable on the pool's task-handler thread.
+                # PyMft iterators are thread-affine: consume them here and send
+                # only materialized Python chunks to workers. Bound prefetch to
+                # avoid retaining the entire MFT, and preserve input order.
+                pending = deque()
+                for j, c in zip(
+                    generate_chunks(chunk_size, self.parser.entries_json()),
+                    generate_chunks(chunk_size, self.csvparser.entries_csv()),
+                ):
+                    pending.append(pool.apply_async(
+                        _mp_worker, ((j, c, str(self.path), timeline_mode, tags),)
+                    ))
+                    if len(pending) >= workers * 2:
+                        yield pending.popleft().get()
+                while pending:
+                    yield pending.popleft().get()
         else:
             for json_chunk, csv_chunk in zip(
                 generate_chunks(chunk_size, self.parser.entries_json()),
