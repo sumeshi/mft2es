@@ -258,7 +258,7 @@ def _mp_worker(args):
 
 class Mft2es(SafeMultiprocessingMixin):
     def __init__(self, input_path: Path) -> None:
-        self.path = input_path
+        self.path = Path(input_path).resolve()
         self._file_handle_json = self.path.open(mode="rb")
         self._file_handle_csv = self.path.open(mode="rb")
         self.parser = PyMftParser(self._file_handle_json)

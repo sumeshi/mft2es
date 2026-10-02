@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -101,6 +102,62 @@ def test_timeline_json_string_tags_use_common_parser():
 
     assert result[0]["tags"] == ["mft", "host01"]
     assert parse_tags([" host01 ", "case01"]) == ["host01", "case01"]
+
+
+@pytest.mark.parametrize("timeline", [False, True])
+@pytest.mark.parametrize("input_kind", ["relative", "symlink"])
+def test_json_and_es_preserve_the_same_absolute_evidence_path(
+    tmp_path, monkeypatch, timeline, input_kind
+):
+    import importlib
+
+    from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
+    from mft2es.presenters.Mft2jsonPresenter import Mft2jsonPresenter
+
+    source = tmp_path / "MFT"
+    source.write_bytes(b"fixture")
+    monkeypatch.chdir(tmp_path)
+    supplied = Path("MFT")
+    if input_kind == "symlink":
+        supplied = Path("alias")
+        supplied.symlink_to(source)
+    encoded = json.dumps(
+        {
+            "header": {"record_number": 7},
+            "attributes": [
+                {
+                    "header": {"type_code": "StandardInformation"},
+                    "data": {"modified": "2007-06-30T12:50:52.252395Z"},
+                }
+            ],
+        }
+    )
+
+    class Parser:
+        def __init__(self, stream):
+            assert Path(stream.name) == source
+
+        def entries_json(self):
+            return iter([encoded])
+
+        def entries_csv(self):
+            return iter([b"7,0,0,C:/sample.txt"])
+
+    module = importlib.import_module("mft2es.models.Mft2es")
+    monkeypatch.setattr(module, "PyMftParser", Parser)
+    output = tmp_path / "output.json"
+    Mft2jsonPresenter(
+        supplied, str(output), is_quiet=True, timeline_mode=timeline
+    ).export_json()
+    exported = json.loads(output.read_text())
+    for path in (supplied, source):
+        presenter = Mft2esPresenter(path, is_quiet=True, timeline_mode=timeline)
+        records = [record for chunk in presenter.mft2es() for record in chunk]
+        assert records == exported
+        if timeline:
+            assert all(
+                record["log"]["file"]["path"] == str(source) for record in records
+            )
 
 
 def test_cli_comma_separated_tags_reach_existing_argument(tmp_path, monkeypatch):
