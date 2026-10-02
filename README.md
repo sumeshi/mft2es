@@ -86,8 +86,7 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   (default: False)
 
 --tags:
-  Comma-separated tags to add to each record for identification. The built-in
-  "mft" tag is first; duplicate and empty tags are removed while preserving order.
+  Comma-separated tags to add to each record
   (e.g., hostname, domain name) (default: )
 
 --login:
@@ -135,11 +134,8 @@ With tags for host identification:
 $ mft2es '/path/to/your/$MFT' --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-analysis
 ```
 
-> [!WARNING]
-> TLS certificate verification is enabled by default. Use `--no-verify-certs` only
-> when connecting to a trusted cluster with a self-signed or otherwise
-> unverifiable certificate. Use `--ca-certs /path/to/ca.pem` to provide a
-> private CA bundle while keeping verification enabled.
+TLS verification is enabled by default. For a private CA, use
+`--ca-certs /path/to/ca.pem`.
 
 
 ## Appendix
@@ -152,9 +148,8 @@ $ mft2es '/path/to/your/$MFT' --tags "WORKSTATION-1,DOMAIN-ABC" --index=host-ana
 $ mft2json '/path/to/your/$MFT' -o /path/to/output/target.json
 ```
 
-`mft2json` also supports line-delimited output. `--format jsonl` (or `ndjson`)
-writes one record per line without holding the entire dataset in memory. When
-no output path is specified, the default extension is `.jsonl`:
+Use `--format jsonl` (or `ndjson`) to write one record per line.
+The default output extension is `.jsonl`:
 
 ```bash
 $ mft2json '/path/to/your/$MFT' --format jsonl
@@ -330,11 +325,7 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
 
 ### Timeline Mode
 
-Timeline `event.type` follows the MACB type: `M` is `modify` (file content
-modification time), `A` is `access`, `C` is `change` (MFT metadata change time),
-and `B` is `creation`. `modify` is a project-specific value rather than an ECS
-standard value, so content and metadata timestamps can be filtered separately.
-The original MACB value remains in `windows.mft.attribute.macb_type`.
+Timeline `event.type`: M → `modify`, A → `access`, C → `change`, B → `creation`.
 
 ```json
 [
@@ -442,7 +433,7 @@ $ uv add mft2es
 
 ### From GitHub Releases
 
-Standalone binaries built with Nuitka are available from GitHub Releases for systems without a Python environment.
+Standalone binaries are available from GitHub Releases for systems without a Python environment.
 
 ```bash
 $ chmod +x ./mft2es
