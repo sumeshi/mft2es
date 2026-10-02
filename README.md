@@ -86,7 +86,8 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
   (default: False)
 
 --tags:
-  Comma-separated tags to add to each record for identification
+  Comma-separated tags to add to each record for identification. The built-in
+  "mft" tag is first; duplicate and empty tags are removed while preserving order.
   (e.g., hostname, domain name) (default: )
 
 --login:
@@ -329,6 +330,12 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
 
 ### Timeline Mode
 
+Timeline `event.type` follows the MACB type: `M` is `modify` (file content
+modification time), `A` is `access`, `C` is `change` (MFT metadata change time),
+and `B` is `creation`. `modify` is a project-specific value rather than an ECS
+standard value, so content and metadata timestamps can be filtered separately.
+The original MACB value remains in `windows.mft.attribute.macb_type`.
+
 ```json
 [
   {
@@ -339,7 +346,7 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
         "file"
       ],
       "type": [
-        "change"
+        "modify"
       ],
       "kind": "event",
       "provider": "mft",

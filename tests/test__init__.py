@@ -17,10 +17,25 @@ def calc_md5(path: Path) -> str:
 
 
 def assert_timeline_content(path: str) -> None:
-    # Verified against the committed presenter with the hash-checked MFT sample.
-    # JSON object key order is not part of the record contract.
+    # The prepare_mft fixture downloads an external sample; do not invoke this
+    # integration test during offline validation.
     records = json.loads(Path(path).read_bytes())
     assert len(records) == 104496
+
+    expected_event_types = {
+        "M": "modify",
+        "A": "access",
+        "C": "change",
+        "B": "creation",
+    }
+    for record in records:
+        macb_type = record["windows"]["mft"]["attribute"]["macb_type"]
+        assert record["event"]["type"] == [expected_event_types[macb_type]]
+        # The committed canonical digest predates the MACB event.type fix.
+        # Normalize only that changed field so the hash still checks all
+        # unaffected output fields against the previously verified sample.
+        record["event"]["type"] = ["change"]
+
     canonical = json.dumps(
         sorted(records, key=lambda record: json.dumps(record, sort_keys=True)),
         sort_keys=True, separators=(",", ":"), ensure_ascii=False,

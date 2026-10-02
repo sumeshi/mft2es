@@ -13,6 +13,12 @@ from mft import PyMftParser
 
 # Constants for timeline analysis
 MACB_MAPPING = {"M": "modified", "A": "accessed", "C": "mft_modified", "B": "created"}
+MACB_EVENT_TYPE_MAPPING = {
+    "M": "modify",
+    "A": "access",
+    "C": "change",
+    "B": "creation",
+}
 
 # Target attributes for timeline analysis
 TIMELINE_ATTRIBUTES = ["StandardInformation", "FileName"]
@@ -27,6 +33,11 @@ def parse_tags(tags: TagsInput) -> List[str]:
     if isinstance(tags, Sequence):
         return [t.strip() for t in tags if t and t.strip()]
     return []
+
+
+def build_tags(tags: TagsInput = None) -> List[str]:
+    """Return the builtin MFT tag followed by unique user tags."""
+    return list(dict.fromkeys(["mft", *parse_tags(tags)]))
 
 
 class SafeMultiprocessingMixin:
@@ -80,7 +91,7 @@ def create_timeline_record(
     mft_file_path: str,
     tags: Optional[List[str]] = None,
 ) -> dict:
-    base_tags = ["mft"] + (tags or [])
+    base_tags = build_tags(tags)
 
     attr_data = attribute.get("data", {})
     record_header = record.get("header", {})
@@ -91,7 +102,7 @@ def create_timeline_record(
         "event": {
             "action": f"mft-{attr_type.lower()}-{macb_type.lower()}",
             "category": ["file"],
-            "type": ["change"],
+            "type": [MACB_EVENT_TYPE_MAPPING[macb_type]],
             "kind": "event",
             "provider": "mft",
             "module": "windows",
@@ -173,7 +184,7 @@ def format_timeline_records(
 def format_standard_record(
     record: dict, filepath: str, tags: Optional[List[str]] = None
 ) -> dict:
-    base_tags = ["mft"] + (tags or [])
+    base_tags = build_tags(tags)
 
     attributes = {}
     for attribute in record.get("attributes"):
