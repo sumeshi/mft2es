@@ -1,4 +1,4 @@
-FROM python:3.11.13-slim-bookworm
+FROM python:3.14-slim-trixie
 
 RUN apt -y update && apt upgrade -qqy && apt -y install \
     curl \

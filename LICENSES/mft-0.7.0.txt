@@ -1,13 +1,13 @@
-mft 0.6.1 — MIT
+mft 0.7.0 — MIT
 
-License declaration: License :: OSI Approved :: MIT License
-Source: https://github.com/omerbenamram/pymft-rs/blob/13b4790e325ea282ba885e0672d339ca3cf8acbc/pyproject.toml
+License declaration: MIT classifier in the upstream Python project metadata.
+Source: https://github.com/omerbenamram/pymft-rs/blob/3266a8726a404947e799fd3e3c51042a8794f987/pyproject.toml
 Upstream author metadata: Omer Ben-Amram <omerbenamram@gmail.com>
 
-Upstream provides no license text or copyright notice in this release's
-repository tree or wheel. The standard MIT text below is supplied based on
-its explicit MIT declaration. The copyright line is the standard template,
-not an upstream notice; its placeholders have deliberately not been filled in.
+The tagged source tree and installed wheel contain no license text or copyright
+notice. The standard MIT text below is supplied based on the upstream MIT
+declaration. The copyright line is the standard template, not an upstream
+notice; its placeholders have deliberately not been filled in.
 
 Standard license: https://opensource.org/license/mit
 Text source: https://github.com/spdx/license-list-data/blob/main/text/MIT.txt

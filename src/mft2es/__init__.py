@@ -1,9 +1,10 @@
 # coding: utf-8
 from typing import List, Optional
+from itertools import chain
 from pathlib import Path
 
 from mft2es.__about__ import __version__
-from mft2es.models.Mft2es import Mft2es
+from mft2es.models.Mft2es import Mft2es, validate_chunk_size
 from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
 
 __all__ = ["__version__", "mft2es", "mft2json"]
@@ -78,7 +79,7 @@ def mft2es(
         pwd=pwd,
         is_quiet=True,
         multiprocess=multiprocess,
-        chunk_size=int(chunk_size),
+        chunk_size=chunk_size,
         timeline_mode=timeline_mode,
         tags=additional_tags,
         verify_certs=verify_certs,
@@ -106,18 +107,18 @@ def mft2json(
         Since the content of the file is loaded into memory at once,
         it requires the same amount of memory as the file to be loaded.
     """
+    validate_chunk_size(chunk_size)
     mft = Mft2es(Path(filepath).resolve())
     try:
-        records: List[dict] = sum(
-            list(
+        records: List[dict] = list(
+            chain.from_iterable(
                 mft.gen_timeline_records(
                     multiprocess=multiprocess,
                     chunk_size=chunk_size,
                     timeline_mode=timeline_mode,
                     tags=additional_tags,
                 )
-            ),
-            list(),
+            )
         )
         return records
     finally:

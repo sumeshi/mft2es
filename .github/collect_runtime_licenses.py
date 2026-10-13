@@ -13,6 +13,9 @@ import sys
 import sysconfig
 
 STANDALONE_DISTRIBUTIONS = (
+    "sniffio",
+    "idna",
+    "anyio",
     "typing-extensions",
     "six",
     "python-dateutil",
@@ -104,9 +107,9 @@ def collect(output_file: Path) -> None:
                 )
                 if text.strip():
                     materials.append(f"--- {path} ---\n{text.rstrip()}")
-        if not materials and (name, package.version) == ("mft", "0.6.1"):
+        if not materials and (name, package.version) == ("mft", "0.7.0"):
             materials.append(
-                (project_root / "LICENSES" / "mft-0.6.1.txt").read_text(
+                (project_root / "LICENSES" / "mft-0.7.0.txt").read_text(
                     encoding="utf-8"
                 )
             )

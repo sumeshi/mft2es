@@ -59,6 +59,57 @@ def test_timeline_macb_mapping_covers_all_four_types():
     }
 
 
+def test_timeline_keeps_repeated_filename_attributes():
+    record = {
+        "header": {"record_number": 7},
+        "attributes": [
+            {
+                "header": {"type_code": "FileName", "attribute_id": 1},
+                "data": {
+                    "modified": "2007-06-30T12:50:52Z",
+                    "accessed": "2007-06-30T12:50:53Z",
+                    "mft_modified": "2007-06-30T12:50:54Z",
+                    "created": "2007-06-30T12:50:55Z",
+                    "name": "first",
+                    "parent": "parent-1",
+                    "namespace": "Win32",
+                },
+            },
+            {
+                "header": {"type_code": "FileName", "attribute_id": 2},
+                "data": {
+                    "modified": "2008-06-30T12:50:52Z",
+                    "accessed": "2008-06-30T12:50:53Z",
+                    "mft_modified": "2008-06-30T12:50:54Z",
+                    "created": "2008-06-30T12:50:55Z",
+                    "name": "second",
+                    "parent": "parent-2",
+                    "namespace": "DOS",
+                },
+            },
+        ],
+    }
+
+    records = format_timeline_records(record, "C:/sample.txt", "MFT")
+    assert len(records) == 8
+    assert {
+        macb: [
+            (r["windows"]["mft"]["attribute"]["header"]["attribute_id"],
+             r["windows"]["mft"]["attribute"]["data"]["name"], r["@timestamp"])
+            for r in records
+            if r["windows"]["mft"]["attribute"]["macb_type"] == macb
+        ]
+        for macb in ("M", "A", "C", "B")
+    } == {
+        "M": [(1, "first", "2007-06-30T12:50:52Z"), (2, "second", "2008-06-30T12:50:52Z")],
+        "A": [(1, "first", "2007-06-30T12:50:53Z"), (2, "second", "2008-06-30T12:50:53Z")],
+        "C": [(1, "first", "2007-06-30T12:50:54Z"), (2, "second", "2008-06-30T12:50:54Z")],
+        "B": [(1, "first", "2007-06-30T12:50:55Z"), (2, "second", "2008-06-30T12:50:55Z")],
+    }
+    assert records[0]["windows"]["mft"]["attribute"]["data"]["parent"] == "parent-1"
+    assert records[0]["windows"]["mft"]["attribute"]["data"]["namespace"] == "Win32"
+
+
 @pytest.mark.parametrize(
     ("tags", "expected"),
     [
@@ -92,7 +143,7 @@ def test_timeline_json_string_tags_use_common_parser():
             ],
         }
     )
-    csv_row = b"7,0,0,C:/sample.txt"
+    csv_row = b"FILE,7,0,0,C:/sample.txt"
 
     from mft2es.models.Mft2es import process_timeline_by_chunk
 
@@ -102,6 +153,186 @@ def test_timeline_json_string_tags_use_common_parser():
 
     assert result[0]["tags"] == ["mft", "host01"]
     assert parse_tags([" host01 ", "case01"]) == ["host01", "case01"]
+
+
+@pytest.mark.parametrize("timeline", [False, True])
+def test_csv_path_keeps_commas_and_quoted_text(timeline):
+    import json
+
+    from mft2es.models.Mft2es import process_standard_by_chunk, process_timeline_by_chunk
+
+    path = 'C:/dir, "quoted".txt  '
+    record = {
+        "header": {"record_number": 7},
+        "attributes": [
+            {
+                "header": {"type_code": "FileName"},
+                "data": {"modified": "2007-06-30T12:50:52Z"},
+            }
+        ],
+    }
+    encoded_record = json.dumps(record)
+    csv_row = b'Signature,EntryId,Sequence,FileSize,FullPath\nFILE,7,0,0,"C:/dir, ""quoted"".txt  "'
+
+    results = (
+        process_timeline_by_chunk([encoded_record], [csv_row], "MFT")
+        if timeline
+        else process_standard_by_chunk([encoded_record], [csv_row])
+    )
+
+    if timeline:
+        assert results[0]["windows"]["mft"]["record"]["path"] == path
+    else:
+        assert results[0]["attributes"]["FileName"]["data"]["path"] == path
+
+
+@pytest.mark.parametrize("timeline", [False, True])
+def test_csv_reader_matches_record_ids_and_rejects_misalignment(timeline):
+    import json
+
+    from mft2es.models.Mft2es import process_standard_by_chunk, process_timeline_by_chunk
+
+    record = {
+        "header": {"record_number": 7},
+        "attributes": [
+            {
+                "header": {"type_code": "FileName"},
+                "data": {"modified": "2007-06-30T12:50:52Z"},
+            }
+        ],
+    }
+    wrong_id_row = b"FILE,8,0,0,C:/wrong.txt"
+
+    with pytest.raises(ValueError, match="record 7"):
+        if timeline:
+            process_timeline_by_chunk([json.dumps(record)], [wrong_id_row], "MFT")
+        else:
+            process_standard_by_chunk([json.dumps(record)], [wrong_id_row])
+
+    with pytest.raises(RuntimeError, match="chunk lengths"):
+        if timeline:
+            process_timeline_by_chunk([json.dumps(record)], [], "MFT")
+        else:
+            process_standard_by_chunk([json.dumps(record)], [])
+
+
+def test_model_rejects_json_csv_record_count_mismatch(tmp_path, monkeypatch):
+    import importlib
+    import json
+
+    from mft2es.models.Mft2es import Mft2es
+
+    record = json.dumps({"header": {"record_number": 7}, "attributes": []})
+
+    class Parser:
+        def __init__(self, _stream):
+            pass
+
+        def entries_json(self):
+            return iter([record])
+
+        def entries_csv(self):
+            return iter([])
+
+    monkeypatch.setattr(importlib.import_module("mft2es.models.Mft2es"), "PyMftParser", Parser)
+    source = tmp_path / "MFT"
+    source.write_bytes(b"fixture")
+    parser = Mft2es(source)
+    try:
+        with pytest.raises(RuntimeError, match="record counts"):
+            list(parser.gen_timeline_records(False, 1))
+    finally:
+        parser.close()
+
+
+def test_repeated_file_name_timeline_matches_json_and_es_exports(
+    tmp_path, monkeypatch
+):
+    import importlib
+    import json
+
+    from mft2es.models.Mft2es import process_timeline_by_chunk
+    from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
+    from mft2es.presenters.Mft2jsonPresenter import Mft2jsonPresenter
+
+    record = {
+        "header": {"record_number": 7},
+        "attributes": [
+            {
+                "header": {"type_code": "StandardInformation", "attribute_id": 1},
+                "data": {
+                    "modified": "2007-06-30T12:50:52Z", "accessed": "2007-06-30T12:50:53Z",
+                    "mft_modified": "2007-06-30T12:50:54Z", "created": "2007-06-30T12:50:55Z",
+                },
+            },
+            {
+                "header": {"type_code": "FileName", "attribute_id": 2},
+                "data": {
+                    "modified": "2008-06-30T12:50:52Z", "accessed": "2008-06-30T12:50:53Z",
+                    "mft_modified": "2008-06-30T12:50:54Z", "created": "2008-06-30T12:50:55Z",
+                    "name": "first", "parent": "parent-1", "namespace": "Win32",
+                },
+            },
+            {
+                "header": {"type_code": "FileName", "attribute_id": 3},
+                "data": {
+                    "modified": "2009-06-30T12:50:52Z", "accessed": "2009-06-30T12:50:53Z",
+                    "mft_modified": "2009-06-30T12:50:54Z", "created": "2009-06-30T12:50:55Z",
+                    "name": "second", "parent": "parent-2", "namespace": "DOS",
+                },
+            },
+        ],
+    }
+    encoded = json.dumps(record)
+    csv_row = b"FILE,7,0,0,C:/representative.txt"
+    source = tmp_path / "MFT"
+    source.write_bytes(b"fixture")
+    expected = process_timeline_by_chunk(
+        [encoded], [csv_row], str(source.resolve())
+    )
+    assert len(expected) == 12
+
+    class Parser:
+        def __init__(self, _stream):
+            pass
+
+        def entries_json(self):
+            return iter([encoded])
+
+        def entries_csv(self):
+            return iter([csv_row])
+
+    model = importlib.import_module("mft2es.models.Mft2es")
+    monkeypatch.setattr(model, "PyMftParser", Parser)
+    es_module = importlib.import_module("mft2es.presenters.Mft2esPresenter")
+    indexed = []
+
+    class Elasticsearch:
+        def __init__(self, **_kwargs):
+            pass
+
+        def bulk_indice(self, records, *_args):
+            indexed.extend(records)
+            return len(records), []
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(es_module, "ElasticsearchUtils", Elasticsearch)
+    for output_format in ("json", "jsonl"):
+        output = tmp_path / f"timeline.{output_format}"
+        Mft2jsonPresenter(
+            source, output, is_quiet=True, timeline_mode=True,
+            output_format=output_format,
+        ).export_json()
+        content = output.read_text()
+        actual = json.loads(content) if output_format == "json" else [
+            json.loads(line) for line in content.splitlines()
+        ]
+        assert actual == expected
+
+    Mft2esPresenter(source, is_quiet=True, timeline_mode=True).bulk_import()
+    assert indexed == expected
 
 
 @pytest.mark.parametrize("timeline", [False, True])
@@ -141,7 +372,7 @@ def test_json_and_es_preserve_the_same_absolute_evidence_path(
             return iter([encoded])
 
         def entries_csv(self):
-            return iter([b"7,0,0,C:/sample.txt"])
+            return iter([b"FILE,7,0,0,C:/sample.txt"])
 
     module = importlib.import_module("mft2es.models.Mft2es")
     monkeypatch.setattr(module, "PyMftParser", Parser)

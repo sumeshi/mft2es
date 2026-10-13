@@ -1,12 +1,15 @@
 # coding: utf-8
 from itertools import chain
+import os
 from pathlib import Path
+import stat
+from tempfile import NamedTemporaryFile
 from typing import List, Optional, Union
 
 import orjson
 from tqdm import tqdm
 
-from mft2es.models.Mft2es import Mft2es
+from mft2es.models.Mft2es import Mft2es, validate_chunk_size
 
 
 class Mft2jsonPresenter(object):
@@ -22,6 +25,7 @@ class Mft2jsonPresenter(object):
         tags: Optional[Union[str, List[str]]] = None,
         output_format: str = "json",
     ):
+        validate_chunk_size(chunk_size)
         if output_format not in ("json", "jsonl", "ndjson"):
             raise ValueError(f"Invalid output format: {output_format}")
         self.output_format = output_format
@@ -39,9 +43,10 @@ class Mft2jsonPresenter(object):
         self.timeline_mode = timeline_mode
         self.tags = tags
 
-    def export_json(self) -> None:
+    def _check_output_path(self) -> None:
         if self.output_path.resolve() == self.input_path or (
-            self.output_path.exists() and self.input_path.exists()
+            self.output_path.exists()
+            and self.input_path.exists()
             and self.output_path.samefile(self.input_path)
         ):
             raise ValueError(
@@ -50,36 +55,58 @@ class Mft2jsonPresenter(object):
             )
         if self.output_path.is_symlink():
             raise ValueError("The output path must not be a symbolic link.")
+
+    def export_json(self) -> None:
+        self._check_output_path()
         r = Mft2es(self.input_path)
+        records = None
+        progress = None
+        temporary_path = None
         try:
-            generator = (
-                r.gen_timeline_records(
-                    multiprocess=self.multiprocess,
-                    chunk_size=self.chunk_size,
-                    timeline_mode=self.timeline_mode,
-                    tags=self.tags,
-                )
-                if self.is_quiet
-                else tqdm(
-                    r.gen_timeline_records(
-                        multiprocess=self.multiprocess,
-                        chunk_size=self.chunk_size,
-                        timeline_mode=self.timeline_mode,
-                        tags=self.tags,
-                    )
-                )
+            records = r.gen_timeline_records(
+                multiprocess=self.multiprocess,
+                chunk_size=self.chunk_size,
+                timeline_mode=self.timeline_mode,
+                tags=self.tags,
             )
-            if self.output_format == "json":
-                self.output_path.write_bytes(
-                    orjson.dumps(
-                        list(chain.from_iterable(generator)), option=orjson.OPT_INDENT_2
+            progress = records if self.is_quiet else tqdm(records)
+            with NamedTemporaryFile(
+                mode="wb",
+                dir=self.output_path.parent,
+                prefix=f".{self.output_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as output:
+                temporary_path = Path(output.name)
+                if self.output_format == "json":
+                    output.write(
+                        orjson.dumps(
+                            list(chain.from_iterable(progress)),
+                            option=orjson.OPT_INDENT_2,
+                        )
                     )
-                )
-            else:
-                with self.output_path.open("wb") as output:
-                    for chunk in generator:
+                else:
+                    for chunk in progress:
                         for record in chunk:
                             output.write(orjson.dumps(record) + b"\n")
                         output.flush()
+            self._check_output_path()
+            if os.name == "posix" and self.output_path.exists():
+                temporary_path.chmod(
+                    stat.S_IMODE(self.output_path.stat().st_mode)
+                )
+            os.replace(temporary_path, self.output_path)
         finally:
-            r.close()
+            try:
+                if progress is not None and progress is not records:
+                    progress.close()
+            finally:
+                try:
+                    if records is not None:
+                        records.close()
+                finally:
+                    try:
+                        r.close()
+                    finally:
+                        if temporary_path is not None:
+                            temporary_path.unlink(missing_ok=True)

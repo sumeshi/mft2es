@@ -4,8 +4,12 @@ from typing import List, Optional, Union
 
 from tqdm import tqdm
 
-from mft2es.models.Mft2es import Mft2es
+from mft2es.models.Mft2es import Mft2es, validate_chunk_size
 from mft2es.models.ElasticsearchUtils import ElasticsearchUtils
+
+
+class InputProcessingError(RuntimeError):
+    pass
 
 
 class Mft2esPresenter(object):
@@ -29,6 +33,7 @@ class Mft2esPresenter(object):
         verify_certs: bool = True,
         ca_certs: str | None = None,
     ):
+        validate_chunk_size(chunk_size)
         self.input_path = input_path
         self.host = host
         self.port = port
@@ -47,19 +52,49 @@ class Mft2esPresenter(object):
         self.ca_certs = ca_certs
 
     def mft2es(self):
-        mft2es_instance = Mft2es(self.input_path)
         try:
-            generator = mft2es_instance.gen_timeline_records(
-                multiprocess=self.multiprocess,
-                chunk_size=self.chunk_size,
-                timeline_mode=self.timeline_mode,
-                tags=self.tags,
-            )
-            if not self.is_quiet:
-                generator = tqdm(generator)
-            yield from generator
+            mft2es_instance = Mft2es(self.input_path)
+        except Exception as error:
+            raise InputProcessingError(
+                f"Failed to process MFT input {self.input_path}: {error}"
+            ) from error
+        records = None
+        progress = None
+        try:
+            try:
+                records = mft2es_instance.gen_timeline_records(
+                    multiprocess=self.multiprocess,
+                    chunk_size=self.chunk_size,
+                    timeline_mode=self.timeline_mode,
+                    tags=self.tags,
+                )
+                progress = records if self.is_quiet else tqdm(records)
+                iterator = iter(progress)
+            except Exception as error:
+                raise InputProcessingError(
+                    f"Failed to process MFT input {self.input_path}: {error}"
+                ) from error
+
+            while True:
+                try:
+                    batch = next(iterator)
+                except StopIteration:
+                    break
+                except Exception as error:
+                    raise InputProcessingError(
+                        f"Failed to process MFT input {self.input_path}: {error}"
+                    ) from error
+                yield batch
         finally:
-            mft2es_instance.close()
+            try:
+                if progress is not None and progress is not records:
+                    progress.close()
+            finally:
+                try:
+                    if records is not None:
+                        records.close()
+                finally:
+                    mft2es_instance.close()
 
     def bulk_import(self):
         es = ElasticsearchUtils(

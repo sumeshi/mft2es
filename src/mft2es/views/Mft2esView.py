@@ -1,10 +1,14 @@
 # coding: utf-8
 from typing import List
+import os
 from pathlib import Path
 from multiprocessing import cpu_count
+import stat
+import sys
 
 from mft2es.views.BaseView import BaseView
 from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
+from mft2es.presenters.Mft2esPresenter import InputProcessingError
 
 
 class Mft2esView(BaseView):
@@ -64,22 +68,82 @@ class Mft2esView(BaseView):
             help="Disable TLS certificate verification.",
         )
 
-    def __list_mft_files(self, mft_files: List[str]) -> List[Path]:
+    def __list_mft_files(self, mft_files: List[str]):
         mft_path_list = list()
+        had_invalid_input = False
         for mft_file in mft_files:
-            if Path(mft_file).is_dir():
-                mft_path_list.extend(Path(mft_file).glob("**/mft"))
-                mft_path_list.extend(Path(mft_file).glob("**/MFT"))
-                mft_path_list.extend(Path(mft_file).glob("**/$MFT"))
-            else:
-                mft_path_list.append(Path(mft_file))
+            path = Path(mft_file)
+            try:
+                mode = path.stat().st_mode
+            except OSError as error:
+                print(
+                    f"Warning: could not read {mft_file}: {error}; skipping.",
+                    file=sys.stderr,
+                )
+                had_invalid_input = True
+                continue
 
-        return mft_path_list
+            if stat.S_ISDIR(mode):
+                names = ("mft", "MFT", "$MFT")
+                found_by_name = {name: [] for name in names}
+                walk_had_error = False
+
+                def onerror(error):
+                    nonlocal had_invalid_input
+                    nonlocal walk_had_error
+                    print(
+                        "Warning: could not read "
+                        f"{error.filename or mft_file}: {error}; skipping.",
+                        file=sys.stderr,
+                    )
+                    had_invalid_input = True
+                    walk_had_error = True
+
+                for root, _, filenames in os.walk(
+                    path, onerror=onerror, followlinks=False
+                ):
+                    for filename in filenames:
+                        for name in names:
+                            if os.path.normcase(filename) != os.path.normcase(name):
+                                continue
+                            candidate = Path(root) / filename
+                            try:
+                                if stat.S_ISREG(candidate.stat().st_mode):
+                                    found_by_name[name].append(candidate)
+                            except OSError as error:
+                                onerror(error)
+                            break
+                found = [candidate for name in names for candidate in found_by_name[name]]
+                if not found and not walk_had_error:
+                    print(f"Warning: no MFT file found under {mft_file}; skipping.", file=sys.stderr)
+                    had_invalid_input = True
+                mft_path_list.extend(found)
+            elif stat.S_ISREG(mode):
+                mft_path_list.append(path)
+            else:
+                print(f"Warning: {mft_file} is not a regular file; skipping.", file=sys.stderr)
+                had_invalid_input = True
+
+        unique_paths = []
+        seen_paths = set()
+        for path in mft_path_list:
+            try:
+                resolved = path.resolve()
+            except OSError as error:
+                print(
+                    f"Warning: could not read {path}: {error}; skipping.",
+                    file=sys.stderr,
+                )
+                had_invalid_input = True
+                continue
+            if resolved not in seen_paths:
+                seen_paths.add(resolved)
+                unique_paths.append(resolved)
+        return unique_paths, had_invalid_input
 
     def run(self):
-        mft_files = self.__list_mft_files(self.args.mft_files)
+        mft_files, had_invalid_input = self.__list_mft_files(self.args.mft_files)
         processed_count = 0
-        had_invalid_input = False
 
         if self.args.multiprocess:
             self.log(f"Multiprocessing enabled ({cpu_count()} workers).", self.args.quiet)
@@ -88,50 +152,43 @@ class Mft2esView(BaseView):
             self.log("Timeline analysis mode enabled", self.args.quiet)
 
         if not mft_files:
-            self.log("Error: no MFT files found.", self.args.quiet)
+            print("Error: no MFT files found.", file=sys.stderr)
             raise SystemExit(1)
 
         for mft_file in mft_files:
-            if not mft_file.exists():
-                self.log(
-                    f"Warning: {mft_file} does not exist; skipping.", self.args.quiet
-                )
-                had_invalid_input = True
-                continue
-            if not mft_file.is_file():
-                self.log(
-                    f"Warning: {mft_file} is not a regular file; skipping.", self.args.quiet
-                )
-                had_invalid_input = True
-                continue
             self.log(f"Importing {mft_file}...", self.args.quiet)
 
-            Mft2esPresenter(
-                input_path=mft_file,
-                host=self.args.host,
-                ca_certs=self.args.ca_certs,
-                port=self.args.port,
-                index=self.args.index,
-                scheme=self.args.scheme,
-                pipeline=self.args.pipeline,
-                login=self.args.login,
-                pwd=self.args.pwd,
-                is_quiet=self.args.quiet,
-                multiprocess=self.args.multiprocess,
-                chunk_size=int(self.args.size),
-                logger=self.log,
-                timeline_mode=self.args.timeline,
-                tags=self.args.tags,
-                verify_certs=not self.args.no_verify_certs,
-            ).bulk_import()
+            try:
+                Mft2esPresenter(
+                    input_path=mft_file,
+                    host=self.args.host,
+                    ca_certs=self.args.ca_certs,
+                    port=self.args.port,
+                    index=self.args.index,
+                    scheme=self.args.scheme,
+                    pipeline=self.args.pipeline,
+                    login=self.args.login,
+                    pwd=self.args.pwd,
+                    is_quiet=self.args.quiet,
+                    multiprocess=self.args.multiprocess,
+                    chunk_size=int(self.args.size),
+                    logger=self.log,
+                    timeline_mode=self.args.timeline,
+                    tags=self.args.tags,
+                    verify_certs=not self.args.no_verify_certs,
+                ).bulk_import()
+            except InputProcessingError as error:
+                print(f"Warning: failed to process {mft_file}: {error}", file=sys.stderr)
+                had_invalid_input = True
+                continue
             processed_count += 1
 
         if processed_count == 0:
-            self.log("Error: no valid MFT files were imported.", self.args.quiet)
+            print("Error: no valid MFT files were imported.", file=sys.stderr)
             raise SystemExit(1)
 
         if had_invalid_input:
-            self.log("Import completed with some inputs skipped.", self.args.quiet)
+            print("Import completed with input failures.", file=sys.stderr)
             raise SystemExit(1)
 
         self.log("Import completed successfully.", self.args.quiet)

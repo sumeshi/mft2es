@@ -1,6 +1,7 @@
 # coding: utf-8
 from multiprocessing import cpu_count
 from pathlib import Path
+import sys
 
 from mft2es.views.BaseView import BaseView
 from mft2es.presenters.Mft2jsonPresenter import Mft2jsonPresenter
@@ -40,30 +41,34 @@ class Mft2jsonView(BaseView):
     def run(self):
         mft_path = Path(self.args.mft_file)
         if not mft_path.exists():
-            self.log(f"Error: input path does not exist: {mft_path}", self.args.quiet)
+            print(f"Error: input path does not exist: {mft_path}", file=sys.stderr)
             raise SystemExit(1)
         if not mft_path.is_file():
-            self.log(f"Error: input path is not a regular file: {mft_path}", self.args.quiet)
+            print(f"Error: input path is not a regular file: {mft_path}", file=sys.stderr)
             raise SystemExit(1)
 
-        self.log(f"Converting {self.args.mft_file}.", self.args.quiet)
+        try:
+            self.log(f"Converting {self.args.mft_file}.", self.args.quiet)
 
-        if self.args.multiprocess:
-            self.log(f"Multiprocessing enabled ({cpu_count()} workers).", self.args.quiet)
+            if self.args.multiprocess:
+                self.log(f"Multiprocessing enabled ({cpu_count()} workers).", self.args.quiet)
 
-        if self.args.timeline:
-            self.log("Timeline analysis mode enabled", self.args.quiet)
+            if self.args.timeline:
+                self.log("Timeline analysis mode enabled", self.args.quiet)
 
-        Mft2jsonPresenter(
-            input_path=self.args.mft_file,
-            output_path=self.args.output_file,
-            is_quiet=self.args.quiet,
-            multiprocess=self.args.multiprocess,
-            chunk_size=self.args.size,
-            timeline_mode=self.args.timeline,
-            tags=self.args.tags,
-            output_format=self.args.format,
-        ).export_json()
+            Mft2jsonPresenter(
+                input_path=self.args.mft_file,
+                output_path=self.args.output_file,
+                is_quiet=self.args.quiet,
+                multiprocess=self.args.multiprocess,
+                chunk_size=self.args.size,
+                timeline_mode=self.args.timeline,
+                tags=self.args.tags,
+                output_format=self.args.format,
+            ).export_json()
+        except Exception as error:
+            print(f"Error: {error}", file=sys.stderr)
+            raise SystemExit(1) from None
 
         self.log("Conversion completed successfully.", self.args.quiet)
 

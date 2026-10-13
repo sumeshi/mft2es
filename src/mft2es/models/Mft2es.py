@@ -2,9 +2,11 @@
 import ntpath
 import sys
 import os
+import csv
+import io
 from pathlib import Path
-from typing import Dict, Generator, Iterable, List, Optional, Sequence, Union
-from itertools import islice
+from typing import Generator, Iterable, List, Optional, Sequence, Union
+from itertools import islice, zip_longest
 import multiprocessing as mp
 from collections import deque
 
@@ -23,6 +25,29 @@ MACB_EVENT_TYPE_MAPPING = {
 # Target attributes for timeline analysis
 TIMELINE_ATTRIBUTES = ["StandardInformation", "FileName"]
 TagsInput = Optional[Union[str, Sequence[str]]]
+
+
+def validate_chunk_size(chunk_size: int) -> None:
+    if type(chunk_size) is not int or chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
+
+
+def filename_from_csv_blob(blob: bytes, record_number: int) -> str:
+    header = None
+    for row in csv.reader(io.StringIO(blob.decode("utf-8"), newline="")):
+        if not row:
+            continue
+        if "EntryId" in row and "FullPath" in row:
+            header = [field.strip() for field in row]
+            continue
+        entry_id_column = header.index("EntryId") if header else 1
+        full_path_column = header.index("FullPath") if header else -1
+        if (
+            len(row) > entry_id_column
+            and row[entry_id_column].strip() == str(record_number)
+        ):
+            return row[full_path_column]
+    raise ValueError(f"CSV row for MFT record {record_number} was not found")
 
 
 def parse_tags(tags: TagsInput) -> List[str]:
@@ -65,20 +90,12 @@ class SafeMultiprocessingMixin:
 
 
 def generate_chunks(chunk_size: int, iterable: Iterable) -> Generator:
+    validate_chunk_size(chunk_size)
     i = iter(iterable)
     piece = list(islice(i, chunk_size))
     while piece:
         yield piece
         piece = list(islice(i, chunk_size))
-
-
-def organize_attributes_by_type(record: dict) -> Dict[str, dict]:
-    attributes = {}
-    for attribute in record.get("attributes", []):
-        type_code = attribute.get("header", {}).get("type_code")
-        if type_code:
-            attributes[type_code] = attribute
-    return attributes
 
 
 def create_timeline_record(
@@ -168,11 +185,12 @@ def create_macb_records_for_attribute(
 def format_timeline_records(
     record: dict, filepath: str, mft_file_path: str, tags: Optional[List[str]] = None
 ) -> List[dict]:
-    attributes = organize_attributes_by_type(record)
     timeline_records = []
 
-    for attr_type in TIMELINE_ATTRIBUTES:
-        attribute = attributes.get(attr_type, {})
+    for attribute in record.get("attributes", []):
+        attr_type = attribute.get("header", {}).get("type_code")
+        if attr_type not in TIMELINE_ATTRIBUTES:
+            continue
         macb_records = create_macb_records_for_attribute(
             record, attribute, attr_type, filepath, mft_file_path, tags
         )
@@ -217,11 +235,13 @@ def format_standard_record(
 def process_standard_by_chunk(
     records: List[str], rows: List[bytes], tags: TagsInput = None
 ) -> List[dict]:
-    filename_list: List[str] = [
-        row.decode("utf-8").split(",")[-1].strip() for row in rows
-    ]
-
     record_list: List[dict] = [orjson.loads(r) for r in records]
+    if len(record_list) != len(rows):
+        raise RuntimeError("MFT JSON and CSV chunk lengths do not match")
+    filename_list = [
+        filename_from_csv_blob(row, record.get("header", {}).get("record_number"))
+        for record, row in zip(record_list, rows)
+    ]
     parsed_tags = parse_tags(tags)
 
     return [
@@ -233,11 +253,13 @@ def process_standard_by_chunk(
 def process_timeline_by_chunk(
     records: List[str], rows: List[bytes], mft_file_path: str, tags: TagsInput = None
 ) -> List[dict]:
-    filename_list: List[str] = [
-        row.decode("utf-8").split(",")[-1].strip() for row in rows
-    ]
-
     record_list: List[dict] = [orjson.loads(r) for r in records]
+    if len(record_list) != len(rows):
+        raise RuntimeError("MFT JSON and CSV chunk lengths do not match")
+    filename_list = [
+        filename_from_csv_blob(row, record.get("header", {}).get("record_number"))
+        for record, row in zip(record_list, rows)
+    ]
     parsed_tags = parse_tags(tags)
 
     timeline_records = []
@@ -275,6 +297,7 @@ class Mft2es(SafeMultiprocessingMixin):
         timeline_mode: bool = False,
         tags: TagsInput = None,
     ) -> Generator:
+        validate_chunk_size(chunk_size)
         if multiprocess:
             ctx = self.get_multiprocessing_context()
             workers = self.get_cpu_count()
@@ -284,10 +307,12 @@ class Mft2es(SafeMultiprocessingMixin):
                 # only materialized Python chunks to workers. Bound prefetch to
                 # avoid retaining the entire MFT, and preserve input order.
                 pending = deque()
-                for j, c in zip(
+                for j, c in zip_longest(
                     generate_chunks(chunk_size, self.parser.entries_json()),
                     generate_chunks(chunk_size, self.csvparser.entries_csv()),
                 ):
+                    if j is None or c is None:
+                        raise RuntimeError("MFT JSON and CSV record counts do not match")
                     pending.append(pool.apply_async(
                         _mp_worker, ((j, c, str(self.path), timeline_mode, tags),)
                     ))
@@ -296,10 +321,12 @@ class Mft2es(SafeMultiprocessingMixin):
                 while pending:
                     yield pending.popleft().get()
         else:
-            for json_chunk, csv_chunk in zip(
+            for json_chunk, csv_chunk in zip_longest(
                 generate_chunks(chunk_size, self.parser.entries_json()),
                 generate_chunks(chunk_size, self.csvparser.entries_csv()),
             ):
+                if json_chunk is None or csv_chunk is None:
+                    raise RuntimeError("MFT JSON and CSV record counts do not match")
                 if timeline_mode:
                     yield process_timeline_by_chunk(
                         json_chunk, csv_chunk, str(self.path), tags
