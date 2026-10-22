@@ -4,10 +4,10 @@ from itertools import chain
 from pathlib import Path
 
 from mft2es.__about__ import __version__
-from mft2es.models.Mft2es import Mft2es, validate_chunk_size
+from mft2es.models.Mft2es import Mft2es, PartialExtractionError, validate_chunk_size
 from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
 
-__all__ = ["__version__", "mft2es", "mft2json"]
+__all__ = ["__version__", "mft2es", "mft2json", "PartialExtractionError"]
 
 
 def mft2es(
@@ -120,6 +120,8 @@ def mft2json(
                 )
             )
         )
-        return records
     finally:
         mft.close()
+    if mft.diagnostics:
+        raise PartialExtractionError(mft.diagnostics, records)
+    return records

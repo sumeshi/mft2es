@@ -4,6 +4,7 @@ import sys
 import os
 import csv
 import io
+import logging
 from pathlib import Path
 from typing import Generator, Iterable, List, Optional, Sequence, Union
 from itertools import islice, zip_longest
@@ -25,6 +26,17 @@ MACB_EVENT_TYPE_MAPPING = {
 # Target attributes for timeline analysis
 TIMELINE_ATTRIBUTES = ["StandardInformation", "FileName"]
 TagsInput = Optional[Union[str, Sequence[str]]]
+logger = logging.getLogger(__name__)
+
+
+class PartialExtractionError(RuntimeError):
+    def __init__(self, diagnostics, records=None):
+        self.diagnostics = list(diagnostics)
+        self.records = records
+        super().__init__(
+            f"Partial extraction: {len(self.diagnostics)} failure(s); "
+            "output is incomplete."
+        )
 
 
 def validate_chunk_size(chunk_size: int) -> None:
@@ -42,9 +54,8 @@ def filename_from_csv_blob(blob: bytes, record_number: int) -> str:
             continue
         entry_id_column = header.index("EntryId") if header else 1
         full_path_column = header.index("FullPath") if header else -1
-        if (
-            len(row) > entry_id_column
-            and row[entry_id_column].strip() == str(record_number)
+        if len(row) > entry_id_column and row[entry_id_column].strip() == str(
+            record_number
         ):
             return row[full_path_column]
     raise ValueError(f"CSV row for MFT record {record_number} was not found")
@@ -233,54 +244,111 @@ def format_standard_record(
 
 
 def process_standard_by_chunk(
-    records: List[str], rows: List[bytes], tags: TagsInput = None
+    records: List[Union[str, Exception]],
+    rows: List[Union[bytes, Exception]],
+    tags: TagsInput = None,
+    diagnostics: Optional[List[dict]] = None,
+    record_offset: int = 0,
 ) -> List[dict]:
-    record_list: List[dict] = [orjson.loads(r) for r in records]
-    if len(record_list) != len(rows):
-        raise RuntimeError("MFT JSON and CSV chunk lengths do not match")
-    filename_list = [
-        filename_from_csv_blob(row, record.get("header", {}).get("record_number"))
-        for record, row in zip(record_list, rows)
-    ]
-    parsed_tags = parse_tags(tags)
-
-    return [
-        format_standard_record(record, filename, parsed_tags)
-        for record, filename in zip(record_list, filename_list)
-    ]
+    return _process_chunk(records, rows, "", False, tags, diagnostics, record_offset)
 
 
 def process_timeline_by_chunk(
-    records: List[str], rows: List[bytes], mft_file_path: str, tags: TagsInput = None
+    records: List[Union[str, Exception]],
+    rows: List[Union[bytes, Exception]],
+    mft_file_path: str,
+    tags: TagsInput = None,
+    diagnostics: Optional[List[dict]] = None,
+    record_offset: int = 0,
 ) -> List[dict]:
-    record_list: List[dict] = [orjson.loads(r) for r in records]
-    if len(record_list) != len(rows):
+    return _process_chunk(
+        records, rows, mft_file_path, True, tags, diagnostics, record_offset
+    )
+
+
+def _process_chunk(
+    records, rows, mft_file_path, timeline_mode, tags, diagnostics, record_offset
+):
+    if len(records) != len(rows):
         raise RuntimeError("MFT JSON and CSV chunk lengths do not match")
-    filename_list = [
-        filename_from_csv_blob(row, record.get("header", {}).get("record_number"))
-        for record, row in zip(record_list, rows)
-    ]
     parsed_tags = parse_tags(tags)
+    output = []
+    # Native iterators can yield Exception objects. Never filter either stream
+    # independently: the paired item must be discarded from both streams.
+    for index, (raw_record, row) in enumerate(zip(records, rows), record_offset):
+        record_number = None
+        if isinstance(raw_record, Exception):
+            _record_pair_error(diagnostics, index, record_number, "parse", raw_record)
+            continue
+        try:
+            record = orjson.loads(raw_record)
+            record_number = record.get("header", {}).get("record_number")
+        except Exception as error:
+            if isinstance(row, Exception):
+                _record_pair_error(diagnostics, index, record_number, "parse", row)
+            else:
+                _record_pair_error(diagnostics, index, record_number, "json", error)
+            continue
+        # Decode JSON first so a CSV failure retains the known record number.
+        # Native error values must not be raised: adding tracebacks would form
+        # cycles through the input chunk and retain the thread-affine parsers.
+        if isinstance(row, Exception):
+            _record_pair_error(diagnostics, index, record_number, "parse", row)
+            continue
+        try:
+            stage = "csv"
+            filename = filename_from_csv_blob(row, record_number)
+            stage = "normalize"
+            if timeline_mode:
+                # Build all MACB records before publishing any from this record.
+                converted = format_timeline_records(
+                    record, filename, mft_file_path, parsed_tags
+                )
+            else:
+                converted = [format_standard_record(record, filename, parsed_tags)]
+        except Exception as error:
+            _record_pair_error(diagnostics, index, record_number, stage, error)
+            continue
+        output.extend(converted)
+    return output
 
-    timeline_records = []
-    for record, filename in zip(record_list, filename_list):
-        timeline_records.extend(
-            format_timeline_records(record, filename, mft_file_path, parsed_tags)
+
+def _record_pair_error(diagnostics, index, record_number, stage, error):
+    diagnostic = {
+        "record_index": index,
+        "record_number": record_number,
+        "stage": stage,
+        "error": f"{type(error).__name__}: {error}",
+    }
+    if diagnostics is not None:
+        diagnostics.append(diagnostic)
+    else:
+        logger.warning(
+            "Skipped MFT record at iterator index %d (%s): %s",
+            index,
+            stage,
+            diagnostic["error"],
         )
-
-    return timeline_records
 
 
 def _mp_worker(args):
-    json_chunk, csv_chunk, mft_file_path, timeline_mode, tags = args
+    json_chunk, csv_chunk, mft_file_path, timeline_mode, tags, record_offset = args
+    diagnostics = []
     if timeline_mode:
-        return process_timeline_by_chunk(json_chunk, csv_chunk, mft_file_path, tags)
-    return process_standard_by_chunk(json_chunk, csv_chunk, tags)
+        records = process_timeline_by_chunk(
+            json_chunk, csv_chunk, mft_file_path, tags, diagnostics, record_offset
+        )
+    else:
+        records = process_standard_by_chunk(
+            json_chunk, csv_chunk, tags, diagnostics, record_offset
+        )
+    return records, diagnostics
 
 
 class Mft2es(SafeMultiprocessingMixin):
     def __init__(self, input_path: Path) -> None:
         self.path = Path(input_path).resolve()
+        self.diagnostics = []
         self._file_handle_json = self.path.open(mode="rb")
         self._file_handle_csv = self.path.open(mode="rb")
         self.parser = PyMftParser(self._file_handle_json)
@@ -290,6 +358,20 @@ class Mft2es(SafeMultiprocessingMixin):
         self._file_handle_json.close()
         self._file_handle_csv.close()
 
+    def _collect_result(self, result):
+        records, diagnostics = result
+        for diagnostic in diagnostics:
+            diagnostic = {"source_file": str(self.path), **diagnostic}
+            self.diagnostics.append(diagnostic)
+            logger.warning(
+                "Skipped MFT record from %s at iterator index %d (%s): %s",
+                self.path,
+                diagnostic["record_index"],
+                diagnostic["stage"],
+                diagnostic["error"],
+            )
+        return records
+
     def gen_timeline_records(
         self,
         multiprocess: bool,
@@ -298,6 +380,7 @@ class Mft2es(SafeMultiprocessingMixin):
         tags: TagsInput = None,
     ) -> Generator:
         validate_chunk_size(chunk_size)
+        self.diagnostics = []
         if multiprocess:
             ctx = self.get_multiprocessing_context()
             workers = self.get_cpu_count()
@@ -307,29 +390,53 @@ class Mft2es(SafeMultiprocessingMixin):
                 # only materialized Python chunks to workers. Bound prefetch to
                 # avoid retaining the entire MFT, and preserve input order.
                 pending = deque()
-                for j, c in zip_longest(
-                    generate_chunks(chunk_size, self.parser.entries_json()),
-                    generate_chunks(chunk_size, self.csvparser.entries_csv()),
+                for chunk_index, (j, c) in enumerate(
+                    zip_longest(
+                        generate_chunks(chunk_size, self.parser.entries_json()),
+                        generate_chunks(chunk_size, self.csvparser.entries_csv()),
+                    )
                 ):
                     if j is None or c is None:
-                        raise RuntimeError("MFT JSON and CSV record counts do not match")
-                    pending.append(pool.apply_async(
-                        _mp_worker, ((j, c, str(self.path), timeline_mode, tags),)
-                    ))
+                        raise RuntimeError(
+                            "MFT JSON and CSV record counts do not match"
+                        )
+                    pending.append(
+                        pool.apply_async(
+                            _mp_worker,
+                            (
+                                (
+                                    j,
+                                    c,
+                                    str(self.path),
+                                    timeline_mode,
+                                    tags,
+                                    chunk_index * chunk_size,
+                                ),
+                            ),
+                        )
+                    )
                     if len(pending) >= workers * 2:
-                        yield pending.popleft().get()
+                        yield self._collect_result(pending.popleft().get())
                 while pending:
-                    yield pending.popleft().get()
+                    yield self._collect_result(pending.popleft().get())
         else:
-            for json_chunk, csv_chunk in zip_longest(
-                generate_chunks(chunk_size, self.parser.entries_json()),
-                generate_chunks(chunk_size, self.csvparser.entries_csv()),
+            for chunk_index, (json_chunk, csv_chunk) in enumerate(
+                zip_longest(
+                    generate_chunks(chunk_size, self.parser.entries_json()),
+                    generate_chunks(chunk_size, self.csvparser.entries_csv()),
+                )
             ):
                 if json_chunk is None or csv_chunk is None:
                     raise RuntimeError("MFT JSON and CSV record counts do not match")
-                if timeline_mode:
-                    yield process_timeline_by_chunk(
-                        json_chunk, csv_chunk, str(self.path), tags
+                yield self._collect_result(
+                    _mp_worker(
+                        (
+                            json_chunk,
+                            csv_chunk,
+                            str(self.path),
+                            timeline_mode,
+                            tags,
+                            chunk_index * chunk_size,
+                        )
                     )
-                else:
-                    yield process_standard_by_chunk(json_chunk, csv_chunk, tags)
+                )

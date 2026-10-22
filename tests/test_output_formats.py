@@ -14,6 +14,8 @@ def test_lines_stream_before_next_chunk(tmp_path, monkeypatch, output_format, qu
     closed = []
 
     class Parser:
+        diagnostics = []
+
         def __init__(self, path):
             pass
 
@@ -76,6 +78,8 @@ def test_line_writer_failure_closes_generator_with_retained_traceback(
     closed = []
 
     class Parser:
+        diagnostics = []
+
         def __init__(self, path):
             pass
 
@@ -132,6 +136,8 @@ def test_quiet_cli_failure_preserves_existing_output_and_cleans_temp_file(
     output.write_bytes(b"previous output")
 
     class Parser:
+        diagnostics = []
+
         def __init__(self, path):
             pass
 
@@ -175,6 +181,8 @@ def test_export_preserves_existing_output_mode(
     output.chmod(0o664)
 
     class Parser:
+        diagnostics = []
+
         def __init__(self, path):
             pass
 

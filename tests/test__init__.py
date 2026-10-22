@@ -176,6 +176,8 @@ def test__mft2json_library_closes_mft(monkeypatch):
     closed = False
 
     class DummyMft:
+        diagnostics = []
+
         def __init__(self, _path):
             pass
 

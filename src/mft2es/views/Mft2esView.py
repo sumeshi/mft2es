@@ -7,6 +7,7 @@ import stat
 import sys
 
 from mft2es.views.BaseView import BaseView
+from mft2es.models.Mft2es import PartialExtractionError
 from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
 from mft2es.presenters.Mft2esPresenter import InputProcessingError
 
@@ -143,7 +144,6 @@ class Mft2esView(BaseView):
 
     def run(self):
         mft_files, had_invalid_input = self.__list_mft_files(self.args.mft_files)
-        processed_count = 0
 
         if self.args.multiprocess:
             self.log(f"Multiprocessing enabled ({cpu_count()} workers).", self.args.quiet)
@@ -177,16 +177,10 @@ class Mft2esView(BaseView):
                     tags=self.args.tags,
                     verify_certs=not self.args.no_verify_certs,
                 ).bulk_import()
-            except InputProcessingError as error:
+            except (InputProcessingError, PartialExtractionError) as error:
                 print(f"Warning: failed to process {mft_file}: {error}", file=sys.stderr)
                 had_invalid_input = True
                 continue
-            processed_count += 1
-
-        if processed_count == 0:
-            print("Error: no valid MFT files were imported.", file=sys.stderr)
-            raise SystemExit(1)
-
         if had_invalid_input:
             print("Import completed with input failures.", file=sys.stderr)
             raise SystemExit(1)
