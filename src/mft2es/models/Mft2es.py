@@ -125,7 +125,7 @@ def create_timeline_record(
     record_header = record.get("header", {})
     attr_header = attribute.get("header", {})
 
-    return {
+    result = {
         "@timestamp": attr_data.get(timestamp_field),
         "event": {
             "action": f"mft-{attr_type.lower()}-{macb_type.lower()}",
@@ -163,6 +163,9 @@ def create_timeline_record(
         "log": {"file": {"path": mft_file_path}},
         "tags": base_tags,
     }
+    if "valid_fixup" in record:
+        result["windows"]["mft"]["valid_fixup"] = record["valid_fixup"]
+    return result
 
 
 def create_macb_records_for_attribute(

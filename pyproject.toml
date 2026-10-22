@@ -10,7 +10,7 @@ authors = [
 requires-python = ">=3.11"
 
 dependencies = [
-    "elasticsearch>=9.5.1",
+    "elasticsearch==9.5.1",
     "mft>=0.7.0",
     "orjson>=3.13.0",
     "tqdm>=4.70.1",

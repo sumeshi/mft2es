@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -368,7 +368,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "elasticsearch", specifier = ">=9.5.1" },
+    { name = "elasticsearch", specifier = "==9.5.1" },
     { name = "mft", specifier = ">=0.7.0" },
     { name = "orjson", specifier = ">=3.13.0" },
     { name = "tqdm", specifier = ">=4.70.1" },

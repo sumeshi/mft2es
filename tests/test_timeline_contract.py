@@ -59,6 +59,37 @@ def test_timeline_macb_mapping_covers_all_four_types():
     }
 
 
+@pytest.mark.parametrize(
+    ("present", "valid_fixup"),
+    [(True, True), (True, False), (True, None), (False, None)],
+)
+def test_timeline_preserves_fixup_status_for_every_macb_event(present, valid_fixup):
+    record = {
+        "header": {"record_number": 7},
+        "attributes": [
+            {"header": {"type_code": kind}, "data": {}}
+            for kind in ("StandardInformation", "FileName")
+        ],
+    }
+    baseline = format_timeline_records(record, "sample.txt", "MFT")
+    if present:
+        record["valid_fixup"] = valid_fixup
+
+    records = format_timeline_records(record, "sample.txt", "MFT")
+
+    assert len(records) == 8
+    for document in records:
+        metadata = document["windows"]["mft"]
+        if present:
+            assert metadata.pop("valid_fixup") is valid_fixup
+        else:
+            assert "valid_fixup" not in metadata
+    assert records == baseline
+    assert ("valid_fixup" in record) is present
+    if present:
+        assert record["valid_fixup"] is valid_fixup
+
+
 def test_timeline_keeps_repeated_filename_attributes():
     record = {
         "header": {"record_number": 7},

@@ -179,6 +179,41 @@ def damaged_mft(tmp_path):
 
 @pytest.mark.parametrize("timeline", [False, True])
 @pytest.mark.parametrize("multiprocess", [False, True])
+def test_native_fixup_mismatch_remains_distinguishable(
+    tmp_path, monkeypatch, timeline, multiprocess
+):
+    mismatch = bytearray(synthetic_file_record(1, "mismatch.txt"))
+    mismatch[510:512] = b"\x02\x00"
+    source = tmp_path / "fixup-MFT"
+    source.write_bytes(
+        synthetic_file_record(0, "first.txt")
+        + mismatch
+        + synthetic_file_record(2, "last.txt")
+    )
+    parser = Mft2es(source)
+    monkeypatch.setattr(parser, "get_cpu_count", lambda: 2)
+    try:
+        with pytest.warns(UserWarning, match="fixup bytes are not equal"):
+            records = [
+                record
+                for batch in parser.gen_timeline_records(
+                    multiprocess, 1, timeline_mode=timeline
+                )
+                for record in batch
+            ]
+    finally:
+        parser.close()
+    if timeline:
+        assert [r["windows"]["mft"]["valid_fixup"] for r in records] == (
+            [True] * 4 + [False] * 4 + [True] * 4
+        )
+    else:
+        assert [r["valid_fixup"] for r in records] == [True, False, True]
+    assert not parser.diagnostics
+
+
+@pytest.mark.parametrize("timeline", [False, True])
+@pytest.mark.parametrize("multiprocess", [False, True])
 @pytest.mark.parametrize("chunk_size", [1, 500])
 def test_native_error_elements_recover_both_neighbors(
     damaged_mft, monkeypatch, timeline, multiprocess, chunk_size
