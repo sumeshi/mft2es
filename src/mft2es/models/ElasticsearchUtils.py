@@ -1,18 +1,26 @@
 # coding: utf-8
-from typing import Iterable
 from hashlib import sha1
-from copy import deepcopy
+from typing import Iterable
 
+import orjson
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
-import orjson
+from .ElasticsearchAdapter import ElasticsearchAdapter
 
 
-class ElasticsearchUtils(object):
+class ElasticsearchUtils:
+    """Shared connection, identity and bulk transport for artifact documents."""
+
     def __init__(
-        self, hostname: str, port: int, scheme: str, login: str, pwd: str,
-        verify_certs: bool = True, ca_certs: str | None = None,
+        self,
+        hostname: str,
+        port: int,
+        scheme: str,
+        login: str,
+        pwd: str,
+        verify_certs: bool = True,
+        ca_certs: str | None = None,
     ) -> None:
         kwargs = {
             "hosts": [f"{scheme}://{hostname}:{port}"],
@@ -23,68 +31,35 @@ class ElasticsearchUtils(object):
         if ca_certs is not None:
             kwargs["ca_certs"] = ca_certs
         self.es = Elasticsearch(**kwargs)
+        self._adapter = ElasticsearchAdapter(self.es)
 
     def close(self) -> None:
         self.es.close()
 
     def calc_hash(self, record: dict) -> str:
-        """Calculate hash value from record.
-
-        Args:
-            record (dict): MFT record.
-
-        Returns:
-            str: Hash value
-        """
+        """Hash the original document, before Elasticsearch-specific changes."""
         return sha1(orjson.dumps(record, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
     def bulk_indice(
-        self, records: Iterable[dict], index_name: str, pipeline: str
-    ) -> tuple:
-        """Bulk indices the documents into Elasticsearch.
-
-        Args:
-            records (Iterable[dict]): Records read from MFT files.
-            index_name (str): Target Elasticsearch Index.
-            pipeline (str): Target Elasticsearch Ingest Pipeline
-
-        Returns:
-            tuple: (success_count, failed_list) - Results of bulk indexing operation
-        """
+        self, records: Iterable[dict], index_name: str, pipeline: str = ""
+    ) -> tuple[int, list]:
+        """Stream actions and return successful count and item failures."""
 
         def actions():
-            for record in records:
-                source = deepcopy(record)
-                data = record.get("attributes", {}).get("DATA", {}).get("data")
-                if isinstance(data, str):
-                    # Preserve local output and IDs while making resident and
-                    # non-resident DATA compatible with one object mapping.
-                    source["attributes"]["DATA"]["data"] = {"resident_data": data}
-                # VCN values are unsigned 64-bit, including sentinel values
-                # beyond Elasticsearch's signed long range. Apply the existing
-                # DATA/BITMAP hex convention to every attribute on ES output.
-                attributes = source.get("attributes", {}).values()
-                if "windows" in source:
-                    attributes = [source["windows"]["mft"]["attribute"]]
-                for attribute in attributes:
-                    header = attribute.get("header", {}).get("residential_header", {})
-                    for field in ("vnc_first", "vnc_last"):
-                        if isinstance(header.get(field), int):
-                            header[field] = hex(header[field])
+            for record in self._adapter.prepare_records(records, index_name):
                 event = {
                     "_id": self.calc_hash(record),
                     "_index": index_name,
-                    "_source": source,
+                    "_source": self._adapter.prepare_source(record),
                 }
-                if pipeline != "":
+                if pipeline:
                     event["pipeline"] = pipeline
                 yield event
 
-        # Perform bulk indexing and return results
         try:
             success, failed = bulk(
                 self.es, actions(), raise_on_error=False, stats_only=False
             )
-            return (success, failed)
-        except Exception as e:
-            raise Exception(f"Bulk indexing error: {e}") from e
+            return success, failed
+        except Exception as error:
+            raise Exception(f"Bulk indexing error: {error}") from error

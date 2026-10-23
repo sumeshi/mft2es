@@ -1,18 +1,19 @@
 # coding: utf-8
 import ntpath
-import sys
-import os
 import csv
 import io
 import logging
 from pathlib import Path
 from typing import Generator, Iterable, List, Optional, Sequence, Union
 from itertools import islice, zip_longest
-import multiprocessing as mp
-from collections import deque
 
 import orjson
 from mft import PyMftParser
+
+from .MultiprocessingUtils import SafeMultiprocessingMixin
+from .MultiprocessingUtils import mp as mp
+from .MultiprocessingUtils import ordered_pool_results
+from .MftRecordReader import MftRecordReader, native_records
 
 # Constants for timeline analysis
 MACB_MAPPING = {"M": "modified", "A": "accessed", "C": "mft_modified", "B": "created"}
@@ -74,30 +75,6 @@ def parse_tags(tags: TagsInput) -> List[str]:
 def build_tags(tags: TagsInput = None) -> List[str]:
     """Return the builtin MFT tag followed by unique user tags."""
     return list(dict.fromkeys(["mft", *parse_tags(tags)]))
-
-
-class SafeMultiprocessingMixin:
-    """Safe multiprocessing management class for Python 3.13 compatibility"""
-
-    @staticmethod
-    def get_multiprocessing_context() -> mp.context.BaseContext:
-        """Get safe multiprocessing context"""
-        if sys.version_info >= (3, 13) or "pytest" in sys.modules:
-            try:
-                ctx = mp.get_context("spawn")
-            except RuntimeError:
-                ctx = mp.get_context()
-        else:
-            ctx = mp.get_context()
-
-        return ctx
-
-    @staticmethod
-    def get_cpu_count() -> int:
-        try:
-            return mp.cpu_count()
-        except NotImplementedError:
-            return os.cpu_count() or 1
 
 
 def generate_chunks(chunk_size: int, iterable: Iterable) -> Generator:
@@ -352,14 +329,28 @@ class Mft2es(SafeMultiprocessingMixin):
     def __init__(self, input_path: Path) -> None:
         self.path = Path(input_path).resolve()
         self.diagnostics = []
-        self._file_handle_json = self.path.open(mode="rb")
-        self._file_handle_csv = self.path.open(mode="rb")
-        self.parser = PyMftParser(self._file_handle_json)
-        self.csvparser = PyMftParser(self._file_handle_csv)
+        self._file_handle_json = None
+        self._file_handle_csv = None
+        self.parser = None
+        self.csvparser = None
+        try:
+            self._file_handle_json = self.path.open(mode="rb")
+            self._file_handle_csv = self.path.open(mode="rb")
+            self.parser = PyMftParser(MftRecordReader(self._file_handle_json))
+            self.csvparser = PyMftParser(MftRecordReader(self._file_handle_csv))
+        except BaseException:
+            # Do not leave a thread-affine parser reachable from the exception's
+            # constructor frame until a later, possibly foreign-thread GC.
+            self.parser = None
+            self.csvparser = None
+            self.close()
+            raise
 
     def close(self):
-        self._file_handle_json.close()
-        self._file_handle_csv.close()
+        if self._file_handle_json is not None:
+            self._file_handle_json.close()
+        if self._file_handle_csv is not None:
+            self._file_handle_csv.close()
 
     def _collect_result(self, result):
         records, diagnostics = result
@@ -375,71 +366,42 @@ class Mft2es(SafeMultiprocessingMixin):
             )
         return records
 
+    def _record_tasks(self, chunk_size, timeline_mode, tags):
+        # Both native streams are thread-affine and must advance together here.
+        pairs = zip_longest(
+            generate_chunks(chunk_size, native_records(self.parser.entries_json())),
+            generate_chunks(chunk_size, native_records(self.csvparser.entries_csv())),
+        )
+        for chunk_index, (json_chunk, csv_chunk) in enumerate(pairs):
+            if json_chunk is None or csv_chunk is None:
+                raise RuntimeError("MFT JSON and CSV record counts do not match")
+            yield (
+                json_chunk,
+                csv_chunk,
+                str(self.path),
+                timeline_mode,
+                tags,
+                chunk_index * chunk_size,
+            )
+
     def gen_timeline_records(
         self,
         multiprocess: bool,
         chunk_size: int,
-        timeline_mode: bool = False,
+        timeline_mode: bool = True,
         tags: TagsInput = None,
     ) -> Generator:
         validate_chunk_size(chunk_size)
         self.diagnostics = []
+        tasks = self._record_tasks(chunk_size, timeline_mode, tags)
         if multiprocess:
             ctx = self.get_multiprocessing_context()
-            workers = self.get_cpu_count()
+            workers = max(1, self.get_cpu_count())
             with ctx.Pool(workers) as pool:
-                # imap consumes its iterable on the pool's task-handler thread.
-                # PyMft iterators are thread-affine: consume them here and send
-                # only materialized Python chunks to workers. Bound prefetch to
-                # avoid retaining the entire MFT, and preserve input order.
-                pending = deque()
-                for chunk_index, (j, c) in enumerate(
-                    zip_longest(
-                        generate_chunks(chunk_size, self.parser.entries_json()),
-                        generate_chunks(chunk_size, self.csvparser.entries_csv()),
-                    )
+                for result in ordered_pool_results(
+                    pool, _mp_worker, tasks, workers * 2
                 ):
-                    if j is None or c is None:
-                        raise RuntimeError(
-                            "MFT JSON and CSV record counts do not match"
-                        )
-                    pending.append(
-                        pool.apply_async(
-                            _mp_worker,
-                            (
-                                (
-                                    j,
-                                    c,
-                                    str(self.path),
-                                    timeline_mode,
-                                    tags,
-                                    chunk_index * chunk_size,
-                                ),
-                            ),
-                        )
-                    )
-                    if len(pending) >= workers * 2:
-                        yield self._collect_result(pending.popleft().get())
-                while pending:
-                    yield self._collect_result(pending.popleft().get())
+                    yield self._collect_result(result)
         else:
-            for chunk_index, (json_chunk, csv_chunk) in enumerate(
-                zip_longest(
-                    generate_chunks(chunk_size, self.parser.entries_json()),
-                    generate_chunks(chunk_size, self.csvparser.entries_csv()),
-                )
-            ):
-                if json_chunk is None or csv_chunk is None:
-                    raise RuntimeError("MFT JSON and CSV record counts do not match")
-                yield self._collect_result(
-                    _mp_worker(
-                        (
-                            json_chunk,
-                            csv_chunk,
-                            str(self.path),
-                            timeline_mode,
-                            tags,
-                            chunk_index * chunk_size,
-                        )
-                    )
-                )
+            for task in tasks:
+                yield self._collect_result(_mp_worker(task))

@@ -1,4 +1,5 @@
 # coding: utf-8
+from argparse import BooleanOptionalAction
 from typing import List
 import os
 from pathlib import Path
@@ -60,8 +61,9 @@ class Mft2esView(BaseView):
         )
         self.parser.add_argument(
             "--timeline",
-            action="store_true",
-            help="Enable timeline analysis mode (separate records by type).",
+            action=BooleanOptionalAction,
+            default=True,
+            help="Use timeline records (default); --no-timeline selects Standard records.",
         )
         self.parser.add_argument(
             "--no-verify-certs",

@@ -253,7 +253,7 @@ def test_native_error_elements_recover_both_neighbors(
 
 def test_native_api_exposes_partial_documents(damaged_mft):
     with pytest.raises(PartialExtractionError) as raised:
-        mft2json(str(damaged_mft))
+        mft2json(str(damaged_mft), timeline_mode=False)
     assert [r["header"]["record_number"] for r in raised.value.records] == [0, 2]
     assert len(raised.value.diagnostics) == 1
 
@@ -268,7 +268,7 @@ def test_native_recovery_releases_parsers_on_their_owner_thread(damaged_mft):
         parser = Mft2es(damaged_mft)
         reference = weakref.ref(parser)
         try:
-            batches = list(parser.gen_timeline_records(False, 500))
+            batches = list(parser.gen_timeline_records(False, 500, timeline_mode=False))
             assert [
                 r["header"]["record_number"] for batch in batches for r in batch
             ] == [0, 2]
@@ -300,6 +300,7 @@ def test_native_cli_commits_partial_output_and_exits_one(
     command = [
         str(Path(sys.executable).with_name("mft2json")),
         str(damaged_mft),
+        "--no-timeline",
         "--format",
         output_format,
         "-o",

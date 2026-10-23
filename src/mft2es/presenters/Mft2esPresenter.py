@@ -28,7 +28,7 @@ class Mft2esPresenter(object):
         multiprocess: bool = False,
         chunk_size: int = 500,
         logger=None,
-        timeline_mode: bool = False,
+        timeline_mode: bool = True,
         tags: Optional[Union[str, List[str]]] = None,
         verify_certs: bool = True,
         ca_certs: str | None = None,

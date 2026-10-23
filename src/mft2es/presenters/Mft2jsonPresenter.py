@@ -21,7 +21,7 @@ class Mft2jsonPresenter(object):
         is_quiet: bool = False,
         multiprocess: bool = False,
         chunk_size: int = 500,
-        timeline_mode: bool = False,
+        timeline_mode: bool = True,
         tags: Optional[Union[str, List[str]]] = None,
         output_format: str = "json",
     ):

@@ -1,4 +1,5 @@
 # coding: utf-8
+from argparse import BooleanOptionalAction
 from multiprocessing import cpu_count
 from pathlib import Path
 import sys
@@ -34,8 +35,9 @@ class Mft2jsonView(BaseView):
         )
         self.parser.add_argument(
             "--timeline",
-            action="store_true",
-            help="Enable timeline analysis mode (separate records by type).",
+            action=BooleanOptionalAction,
+            default=True,
+            help="Use timeline records (default); --no-timeline selects Standard records.",
         )
 
     def run(self):

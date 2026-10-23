@@ -2,155 +2,167 @@ name: publish-release
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
+env:
+  PACKAGE: mft2es
+  JSON_COMMAND: mft2json
+  PYTHON_VERSION: '3.11'
+  NUITKA_EXTRA_ARGS: ''
+  PYTHON_CPU_COUNT: '2'
+  PYTHONUTF8: '1'
+
 jobs:
   build-windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     outputs:
-      version: ${{ steps.create_tag.outputs.version }}
-    strategy:
-      matrix:
-        python-version: ['3.11']
+      version: ${{ steps.release_version.outputs.version }}
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v7.0.1
 
-      - name: install python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: astral-sh/setup-uv@v10.3.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
-        run: |
-          uv sync --locked
+        run: uv sync --locked
 
-      - name: get version
-        id: get_version
+      - name: Validate release version
+        id: release_version
         run: |
-          version=$(uv run --locked python -c "ns={}; exec(open('src/mft2es/__about__.py').read(), ns); print(ns['__version__'])")
-          echo "version=$version" >> "$GITHUB_ENV"
-        shell: bash
+          version=$(uv run --locked python -c "from importlib.metadata import version; print(version('$PACKAGE'))")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: run python
+      - name: Run tests
+        run: uv run --locked pytest
+
+      - name: Verify Python commands
         run: |
-          uv run --locked mft2es -h
-          uv run --locked mft2es -v
-          uv run --locked mft2json -h
-          uv run --locked mft2json -v
-      
+          uv run --locked "$PACKAGE" --help
+          uv run --locked "$PACKAGE" --version
+          uv run --locked "$JSON_COMMAND" --help
+          uv run --locked "$JSON_COMMAND" --version
+
+      - name: Prepare native validation
+        run: uv run --locked python .github/binary_smoke.py prepare
+
       - name: Collect runtime licenses
         run: uv run --locked python .github/collect_runtime_licenses.py dist/LICENSES.txt
 
-      - name: build
-        run: |
-          uv run --locked python -m nuitka --standalone --onefile --follow-imports -o mft2es --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
-          uv run --locked python -m nuitka --standalone --onefile --follow-imports -o mft2json --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
-      
-      - name: verify
-        run: |
-          dist/mft2es.exe -h
-          dist/mft2es.exe -v
-          dist/mft2json.exe -h
-          dist/mft2json.exe -v
-        shell: bash
-      
-      - name: create tag
-        id: create_tag
-        if: startsWith(github.ref, 'refs/heads/master')
-        run: |
-          version=$(uv run --locked python -c "ns={}; exec(open('src/mft2es/__about__.py').read(), ns); print(ns['__version__'])")
-          git tag "v$version"
-          git push origin "v$version"
-          echo "version=$version" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
+      - name: Build binaries
+        run: uv run --locked python .github/build_binaries.py
+
+      - name: Verify binaries
+        run: uv run --locked python .github/binary_smoke.py verify
+
+      - name: Upload binary validation logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: binary-validation-windows
+          path: dist/validation/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Bundle release assets
         run: |
-          bundle="dist/mft2es-windows-x64-v${{ steps.create_tag.outputs.version }}"
+          bundle="dist/$PACKAGE-windows-x64-v${{ steps.release_version.outputs.version }}"
           mkdir -p "$bundle"
-          mv dist/mft2es.exe "$bundle/mft2es.exe"
-          mv dist/mft2json.exe "$bundle/mft2json.exe"
+          mv "dist/$PACKAGE.exe" "$bundle/$PACKAGE.exe"
+          mv "dist/$JSON_COMMAND.exe" "$bundle/$JSON_COMMAND.exe"
           cp dist/LICENSES.txt "$bundle/LICENSES.txt"
           uv run --locked python -c "import shutil; shutil.make_archive(r'$bundle', 'zip', root_dir=r'$bundle')"
-        shell: bash
 
-      - name: create release
+      - name: Create release
         uses: softprops/action-gh-release@v3.0.3
         with:
-          tag_name: v${{ steps.create_tag.outputs.version }}
-          files: |
-            dist/mft2es-windows-x64-v${{ steps.create_tag.outputs.version }}.zip
-          name: Release v${{ steps.create_tag.outputs.version }}
+          tag_name: v${{ steps.release_version.outputs.version }}
+          files: dist/${{ env.PACKAGE }}-windows-x64-v${{ steps.release_version.outputs.version }}.zip
+          name: Release v${{ steps.release_version.outputs.version }}
           body: 'This release was automatically created by GitHub Actions.'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-linux:
     needs: build-windows
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        python-version: ['3.11']
-    env:
-      version: ${{ needs.build-windows.outputs.version }}
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v7.0.1
 
-      - name: install python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: astral-sh/setup-uv@v10.3.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
 
       - name: Install dependencies
-        run: |
-          sudo apt install patchelf
-          uv sync --locked
+        run: uv sync --locked
 
-      - name: run python
+      - name: Run tests
+        run: uv run --locked pytest
+
+      - name: Verify Python commands
         run: |
-          uv run --locked mft2es -h
-          uv run --locked mft2es -v
-          uv run --locked mft2json -h
-          uv run --locked mft2json -v
+          uv run --locked "$PACKAGE" --help
+          uv run --locked "$PACKAGE" --version
+          uv run --locked "$JSON_COMMAND" --help
+          uv run --locked "$JSON_COMMAND" --version
+
+      - name: Prepare native validation
+        run: uv run --locked python .github/binary_smoke.py prepare
 
       - name: Collect runtime licenses
         run: uv run --locked python .github/collect_runtime_licenses.py dist/LICENSES.txt
 
-      - name: build
-        run: |
-          uv run --locked python -m nuitka --standalone --onefile --follow-imports -o mft2es --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2esView.py
-          uv run --locked python -m nuitka --standalone --onefile --follow-imports -o mft2json --output-dir=dist --assume-yes-for-downloads src/mft2es/views/Mft2jsonView.py
-      
-      - name: verify
-        run: |
-          dist/mft2es -h
-          dist/mft2es -v
-          dist/mft2json -h
-          dist/mft2json -v
+      - name: Build binaries
+        run: uv run --locked python .github/build_binaries.py
+
+      - name: Verify binaries
+        run: uv run --locked python .github/binary_smoke.py verify
+
+      - name: Upload binary validation logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: binary-validation-linux
+          path: dist/validation/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Bundle release assets
         run: |
-          bundle="dist/mft2es-linux-x64-v${{ needs.build-windows.outputs.version }}"
+          bundle="dist/$PACKAGE-linux-x64-v${{ needs.build-windows.outputs.version }}"
           mkdir -p "$bundle"
-          mv dist/mft2es "$bundle/mft2es"
-          mv dist/mft2json "$bundle/mft2json"
+          mv "dist/$PACKAGE" "$bundle/$PACKAGE"
+          mv "dist/$JSON_COMMAND" "$bundle/$JSON_COMMAND"
           cp dist/LICENSES.txt "$bundle/LICENSES.txt"
           uv run --locked python -c "import shutil; shutil.make_archive(r'$bundle', 'zip', root_dir=r'$bundle')"
-        shell: bash
 
-      - name: upload asset to release
+      - name: Upload asset to release
         uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: v${{ needs.build-windows.outputs.version }}
-          files: |
-            dist/mft2es-linux-x64-v${{ needs.build-windows.outputs.version }}.zip
+          files: dist/${{ env.PACKAGE }}-linux-x64-v${{ needs.build-windows.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

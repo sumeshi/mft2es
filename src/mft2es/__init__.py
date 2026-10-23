@@ -21,7 +21,7 @@ def mft2es(
     pwd: str = "",
     multiprocess: bool = False,
     chunk_size: int = 500,
-    timeline_mode: bool = False,
+    timeline_mode: bool = True,
     additional_tags: Optional[List[str]] = None,
     verify_certs: bool = True,
 ) -> None:
@@ -58,7 +58,7 @@ def mft2es(
             Number of records to process in each chunk.
 
         timeline_mode (bool, optional):
-            Enable timeline analysis mode. This creates specialized records
+            Enable timeline analysis mode (default: True). This creates specialized records
             for Standard Information and FileName attributes.
 
         additional_tags (Optional[List[str]], optional):
@@ -90,7 +90,7 @@ def mft2json(
     filepath: str,
     multiprocess: bool = False,
     chunk_size: int = 500,
-    timeline_mode: bool = False,
+    timeline_mode: bool = True,
     additional_tags: Optional[List[str]] = None,
 ) -> List[dict]:
     """Convert a Windows MFT file to a list of dictionaries.
@@ -99,7 +99,7 @@ def mft2json(
         filepath (str): Input MFT file.
         multiprocess (bool): Flag to run multiprocessing.
         chunk_size (int): Number of records to process in each chunk.
-        timeline_mode (bool): Enable timeline analysis mode.
+        timeline_mode (bool): Enable timeline analysis mode (default: True).
         additional_tags (Optional[List[str]], optional):
             Tags to add to each record.
 
