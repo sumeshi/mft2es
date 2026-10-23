@@ -13,7 +13,7 @@ from mft import PyMftParser
 from .MultiprocessingUtils import SafeMultiprocessingMixin
 from .MultiprocessingUtils import mp as mp
 from .MultiprocessingUtils import ordered_pool_results
-from .MftRecordReader import MftRecordReader, native_records
+from .MftRecordReader import MftRecordReader, NativeRecord, native_records
 
 # Constants for timeline analysis
 MACB_MAPPING = {"M": "modified", "A": "accessed", "C": "mft_modified", "B": "created"}
@@ -257,6 +257,13 @@ def _process_chunk(
     # independently: the paired item must be discarded from both streams.
     for index, (raw_record, row) in enumerate(zip(records, rows), record_offset):
         record_number = None
+        native_diagnostics = []
+        if isinstance(raw_record, NativeRecord):
+            native_diagnostics.extend(raw_record.diagnostics)
+            raw_record = raw_record.value
+        if isinstance(row, NativeRecord):
+            native_diagnostics.extend(row.diagnostics)
+            row = row.value
         if isinstance(raw_record, Exception):
             _record_pair_error(diagnostics, index, record_number, "parse", raw_record)
             continue
@@ -269,6 +276,8 @@ def _process_chunk(
             else:
                 _record_pair_error(diagnostics, index, record_number, "json", error)
             continue
+        for stage, error in native_diagnostics:
+            _record_pair_error(diagnostics, index, record_number, stage, error)
         # Decode JSON first so a CSV failure retains the known record number.
         # Native error values must not be raised: adding tracebacks would form
         # cycles through the input chunk and retain the thread-affine parsers.
@@ -298,13 +307,15 @@ def _record_pair_error(diagnostics, index, record_number, stage, error):
         "record_index": index,
         "record_number": record_number,
         "stage": stage,
-        "error": f"{type(error).__name__}: {error}",
+        "error": (
+            error if isinstance(error, str) else f"{type(error).__name__}: {error}"
+        ),
     }
     if diagnostics is not None:
         diagnostics.append(diagnostic)
     else:
         logger.warning(
-            "Skipped MFT record at iterator index %d (%s): %s",
+            "Could not fully extract MFT record at iterator index %d (%s): %s",
             index,
             stage,
             diagnostic["error"],
@@ -333,11 +344,19 @@ class Mft2es(SafeMultiprocessingMixin):
         self._file_handle_csv = None
         self.parser = None
         self.csvparser = None
+        self._json_reader = None
+        self._csv_reader = None
         try:
             self._file_handle_json = self.path.open(mode="rb")
             self._file_handle_csv = self.path.open(mode="rb")
-            self.parser = PyMftParser(MftRecordReader(self._file_handle_json))
-            self.csvparser = PyMftParser(MftRecordReader(self._file_handle_csv))
+            self._json_reader = MftRecordReader(
+                self._file_handle_json, inspect_attributes=True
+            )
+            self._csv_reader = MftRecordReader(
+                self._file_handle_csv, detect_path_cycles=True
+            )
+            self.parser = PyMftParser(self._json_reader)
+            self.csvparser = PyMftParser(self._csv_reader)
         except BaseException:
             # Do not leave a thread-affine parser reachable from the exception's
             # constructor frame until a later, possibly foreign-thread GC.
@@ -358,7 +377,7 @@ class Mft2es(SafeMultiprocessingMixin):
             diagnostic = {"source_file": str(self.path), **diagnostic}
             self.diagnostics.append(diagnostic)
             logger.warning(
-                "Skipped MFT record from %s at iterator index %d (%s): %s",
+                "Could not fully extract MFT record from %s at iterator index %d (%s): %s",
                 self.path,
                 diagnostic["record_index"],
                 diagnostic["stage"],
@@ -369,8 +388,18 @@ class Mft2es(SafeMultiprocessingMixin):
     def _record_tasks(self, chunk_size, timeline_mode, tags):
         # Both native streams are thread-affine and must advance together here.
         pairs = zip_longest(
-            generate_chunks(chunk_size, native_records(self.parser.entries_json())),
-            generate_chunks(chunk_size, native_records(self.csvparser.entries_csv())),
+            generate_chunks(
+                chunk_size,
+                native_records(
+                    self.parser.entries_json(), getattr(self, "_json_reader", None)
+                ),
+            ),
+            generate_chunks(
+                chunk_size,
+                native_records(
+                    self.csvparser.entries_csv(), getattr(self, "_csv_reader", None)
+                ),
+            ),
         )
         for chunk_index, (json_chunk, csv_chunk) in enumerate(pairs):
             if json_chunk is None or csv_chunk is None:
