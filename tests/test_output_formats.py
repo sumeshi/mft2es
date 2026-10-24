@@ -2,16 +2,20 @@ import importlib
 import json
 import os
 import stat
+
+import orjson
 import pytest
 
+from mft2es.models.Mft2es import PartialExtractionError
 from mft2es.presenters.Mft2jsonPresenter import Mft2jsonPresenter
 
 
-@pytest.mark.parametrize("output_format", ["jsonl", "ndjson"])
+@pytest.mark.parametrize("output_format", ["json", "jsonl", "ndjson"])
 @pytest.mark.parametrize("quiet", [False, True])
-def test_lines_stream_before_next_chunk(tmp_path, monkeypatch, output_format, quiet):
-    output = tmp_path / "output.jsonl"
+def test_output_streams_before_next_chunk(tmp_path, monkeypatch, output_format, quiet):
+    output = tmp_path / "output.json"
     closed = []
+    first_record = {"name": "日本語", "tags": ["host"]}
 
     class Parser:
         diagnostics = []
@@ -23,9 +27,15 @@ def test_lines_stream_before_next_chunk(tmp_path, monkeypatch, output_format, qu
             assert kwargs == dict(multiprocess=False, chunk_size=1,
                                   timeline_mode=True, tags=["host"])
             try:
-                yield [{"name": "日本語", "tags": ["host"]}]
+                yield [first_record]
                 staged = list(tmp_path.glob(f".{output.name}.*.tmp"))
-                assert staged and staged[0].read_bytes().endswith(b"\n")
+                assert staged
+                expected = (
+                    orjson.dumps([first_record], option=orjson.OPT_INDENT_2)[:-2]
+                    if output_format == "json"
+                    else orjson.dumps(first_record) + b"\n"
+                )
+                assert staged[0].read_bytes() == expected
                 yield [{"name": "second"}]
             finally:
                 closed.append("generator")
@@ -38,11 +48,132 @@ def test_lines_stream_before_next_chunk(tmp_path, monkeypatch, output_format, qu
     Mft2jsonPresenter(tmp_path / "input", output, is_quiet=quiet, chunk_size=1,
                       timeline_mode=True, tags=["host"],
                       output_format=output_format).export_json()
-    assert [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()] == [
-        {"name": "日本語", "tags": ["host"]}, {"name": "second"}]
+    content = output.read_text(encoding="utf-8")
+    actual = json.loads(content) if output_format == "json" else [
+        json.loads(line) for line in content.splitlines()
+    ]
+    assert actual == [first_record, {"name": "second"}]
     assert "日本語" in output.read_text(encoding="utf-8")
     assert closed == ["generator", "parser"]
-    assert Mft2jsonPresenter(tmp_path / "x.mft", "", output_format=output_format).output_path.suffix == ".jsonl"
+    assert Mft2jsonPresenter(
+        tmp_path / "x.mft", "", output_format=output_format
+    ).output_path.suffix == (".json" if output_format == "json" else ".jsonl")
+
+
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        [],
+        [[], []],
+        [[{}]],
+        [[], [{"name": "日本語", "path": "C:\\a\\b", "line": "one\ntwo"}], []],
+        [
+            [{"values": [None, True, False, -1, 1.5], "nested": {"empty": []}}],
+            [],
+            [{"second": [{"empty": {}}, ["a", "b"]]}, {"third": 3}],
+        ],
+    ],
+    ids=["empty", "empty-chunks", "one-empty-object", "unicode", "nested-multiple"],
+)
+def test_streamed_json_matches_complete_array_bytes(tmp_path, monkeypatch, chunks):
+    module = importlib.import_module(Mft2jsonPresenter.__module__)
+    output = tmp_path / "output.json"
+
+    class Parser:
+        diagnostics = []
+
+        def __init__(self, path):
+            pass
+
+        def gen_timeline_records(self, **kwargs):
+            yield from chunks
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(module, "Mft2es", Parser)
+    Mft2jsonPresenter(tmp_path / "input", output, is_quiet=True).export_json()
+
+    expected = orjson.dumps(
+        [record for chunk in chunks for record in chunk],
+        option=orjson.OPT_INDENT_2,
+    )
+    assert output.read_bytes() == expected
+    assert list(tmp_path.glob(f".{output.name}.*.tmp")) == []
+
+
+def test_streamed_json_serialization_failure_preserves_existing_output(
+    tmp_path, monkeypatch
+):
+    module = importlib.import_module(Mft2jsonPresenter.__module__)
+    output = tmp_path / "output.json"
+    output.write_bytes(b"previous output")
+    closed = []
+
+    class Parser:
+        diagnostics = []
+
+        def __init__(self, path):
+            pass
+
+        def gen_timeline_records(self, **kwargs):
+            try:
+                yield [{"n": 1}]
+                yield [{"unsupported": {1, 2}}]
+                pytest.fail("continued after serialization failed")
+            finally:
+                closed.append("generator")
+
+        def close(self):
+            closed.append("parser")
+
+    monkeypatch.setattr(module, "Mft2es", Parser)
+    with pytest.raises(TypeError, match="not JSON serializable"):
+        Mft2jsonPresenter(tmp_path / "input", output, is_quiet=True).export_json()
+
+    assert output.read_bytes() == b"previous output"
+    assert closed == ["generator", "parser"]
+    assert list(tmp_path.glob(f".{output.name}.*.tmp")) == []
+
+
+@pytest.mark.parametrize("has_valid_record", [False, True])
+def test_streamed_json_partial_extraction_publishes_only_nonempty_output(
+    tmp_path, monkeypatch, has_valid_record
+):
+    module = importlib.import_module(Mft2jsonPresenter.__module__)
+    output = tmp_path / "output.json"
+    output.write_bytes(b"previous output")
+    diagnostics = [{"stage": "parse", "error": "bad record"}]
+    closed = []
+
+    class Parser:
+        def __init__(self, path):
+            self.diagnostics = diagnostics
+
+        def gen_timeline_records(self, **kwargs):
+            try:
+                yield []
+                if has_valid_record:
+                    yield [{"n": 1}]
+                yield []
+            finally:
+                closed.append("generator")
+
+        def close(self):
+            closed.append("parser")
+
+    monkeypatch.setattr(module, "Mft2es", Parser)
+    with pytest.raises(PartialExtractionError) as raised:
+        Mft2jsonPresenter(tmp_path / "input", output, is_quiet=True).export_json()
+
+    expected = (
+        orjson.dumps([{"n": 1}], option=orjson.OPT_INDENT_2)
+        if has_valid_record else b"previous output"
+    )
+    assert output.read_bytes() == expected
+    assert raised.value.diagnostics == diagnostics
+    assert closed == ["generator", "parser"]
+    assert list(tmp_path.glob(f".{output.name}.*.tmp")) == []
 
 
 @pytest.mark.parametrize("alias", ["same", "symlink", "hardlink", "default"])
@@ -70,8 +201,8 @@ def test_jsonl_default_suffix(tmp_path):
 
 
 @pytest.mark.parametrize("quiet", [False, True])
-@pytest.mark.parametrize("output_format", ["jsonl", "ndjson"])
-def test_line_writer_failure_closes_generator_with_retained_traceback(
+@pytest.mark.parametrize("output_format", ["json", "jsonl", "ndjson"])
+def test_writer_failure_closes_generator_with_retained_traceback(
     tmp_path, monkeypatch, quiet, output_format
 ):
     module = importlib.import_module(Mft2jsonPresenter.__module__)

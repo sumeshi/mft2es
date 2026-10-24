@@ -1,5 +1,4 @@
 # coding: utf-8
-from itertools import chain
 import os
 from pathlib import Path
 import stat
@@ -80,14 +79,19 @@ class Mft2jsonPresenter(object):
             ) as output:
                 temporary_path = Path(output.name)
                 if self.output_format == "json":
-                    documents = list(chain.from_iterable(progress))
-                    record_count = len(documents)
-                    output.write(
-                        orjson.dumps(
-                            documents,
-                            option=orjson.OPT_INDENT_2,
-                        )
-                    )
+                    for chunk in progress:
+                        for record in chunk:
+                            output.write(b"[\n" if record_count == 0 else b",\n")
+                            # Keep the complete array's indentation without
+                            # retaining more than one serialized record.
+                            output.write(
+                                orjson.dumps(
+                                    [record], option=orjson.OPT_INDENT_2
+                                )[2:-2]
+                            )
+                            record_count += 1
+                        output.flush()
+                    output.write(b"\n]" if record_count else b"[]")
                 else:
                     for chunk in progress:
                         for record in chunk:

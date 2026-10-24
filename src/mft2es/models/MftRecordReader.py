@@ -1,6 +1,7 @@
 """Guard native reads and retain errors hidden by native serialization."""
 
 from dataclasses import dataclass
+from contextlib import nullcontext
 import io
 import struct
 import warnings
@@ -73,9 +74,11 @@ class MftRecordReader:
                         cycle = self._find_parent_cycle(data, record_number)
                         if cycle is not None:
                             self._raise_path_cycle(cycle)
-                self._check_record(data, record_number)
+                suppress_fixup_warning = self._check_record(data, record_number)
                 if self._inspect_attributes and data[:4] in (b"FILE", b"BAAD"):
-                    self.diagnostics.extend(self._attribute_errors(data))
+                    self.diagnostics.extend(
+                        self._attribute_errors(data, suppress_fixup_warning)
+                    )
             except OSError:
                 # Native get_entry advances its expected position only after a
                 # successful read. Restore this position on rejection as well,
@@ -112,8 +115,8 @@ class MftRecordReader:
                 if len(data) != self._record_size or data[:4] not in (b"FILE", b"BAAD"):
                     return None
                 try:
-                    self._check_record(data, record_number)
-                    entry = self._isolated_entry(data)
+                    suppress_fixup_warning = self._check_record(data, record_number)
+                    entry = self._isolated_entry(data, suppress_fixup_warning)
                 except (OSError, RuntimeError):
                     # Native get_entry will handle an unreadable parent itself.
                     return None
@@ -156,8 +159,10 @@ class MftRecordReader:
 
     @staticmethod
     def _check_record(data, record_number):
+        """Validate lengths and report whether isolated fixups may warn."""
         if data[:4] not in (b"FILE", b"BAAD") or len(data) < 24:
-            return
+            return True
+        suppress_fixup_warning = False
         fixed = data
         if data[:4] == b"FILE":
             usa_offset, usa_size = struct.unpack_from("<HH", data, 4)
@@ -168,11 +173,17 @@ class MftRecordReader:
                 or usa_offset + usa_size * 2 > len(data)
                 or (usa_size - 1) * 512 > len(data)
             ):
-                return
+                return True
             fixed = bytearray(data)
+            update_sequence = data[usa_offset : usa_offset + 2]
+            # The isolated parser normalizes bytes 28:32. An unusual USA marker
+            # overlapping that field can change even if the original fixups match.
+            suppress_fixup_warning = usa_offset < 32 and usa_offset + 2 > 28
             replacements = data[usa_offset + 2 : usa_offset + usa_size * 2]
             for sector in range(usa_size - 1):
                 end = (sector + 1) * 512
+                if data[end - 2 : end] != update_sequence:
+                    suppress_fixup_warning = True
                 fixed[end - 2 : end] = replacements[sector * 2 : sector * 2 + 2]
 
         offset = struct.unpack_from("<H", fixed, 20)[0]
@@ -180,7 +191,7 @@ class MftRecordReader:
             attribute_type, length = struct.unpack_from("<II", fixed, offset)
             if attribute_type not in _ATTRIBUTE_TYPES:
                 # This includes the normal 0xFFFFFFFF end marker.
-                return
+                return suppress_fixup_warning
             if length == 0:
                 raise OSError(
                     f"MFT record {record_number} has zero attribute RecordLength "
@@ -216,9 +227,10 @@ class MftRecordReader:
                             )
                         entry += entry_length
             offset += length
+        return suppress_fixup_warning
 
     @staticmethod
-    def _isolated_entry(data):
+    def _isolated_entry(data, suppress_fixup_warning=True):
         # The public object API exposes errors that entries_json() discards.
         # Give it just one record: parent references cannot recurse into other
         # records. Its stride is taken from this copy's header, so normalize it
@@ -226,22 +238,23 @@ class MftRecordReader:
         # original JSON serialization stay unchanged.
         isolated = bytearray(data)
         struct.pack_into("<I", isolated, 28, len(isolated))
-        with warnings.catch_warnings():
+        with warnings.catch_warnings() if suppress_fixup_warning else nullcontext():
             # The original native stream emits this warning with the actual
             # physical entry ID. Avoid a duplicate naming the isolated entry 0.
-            warnings.filterwarnings(
-                "ignore",
-                message=r"WARN  \[mft::entry\].*fixup bytes are not equal",
-                category=UserWarning,
-            )
+            if suppress_fixup_warning:
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r"WARN  \[mft::entry\].*fixup bytes are not equal",
+                    category=UserWarning,
+                )
             parser = PyMftParser(io.BytesIO(isolated))
             entries = parser.entries()
             entry = next(entries)
         return entry
 
     @staticmethod
-    def _attribute_errors(data):
-        entry = MftRecordReader._isolated_entry(data)
+    def _attribute_errors(data, suppress_fixup_warning=True):
+        entry = MftRecordReader._isolated_entry(data, suppress_fixup_warning)
         if isinstance(entry, Exception):
             return []
         return [

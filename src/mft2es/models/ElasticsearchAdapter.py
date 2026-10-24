@@ -11,8 +11,23 @@ class ElasticsearchAdapter:
         return records
 
     def prepare_source(self, record):
-        source = deepcopy(record)
         data = record.get("attributes", {}).get("DATA", {}).get("data")
+        attributes = record.get("attributes", {}).values()
+        if "windows" in record:
+            attributes = [record["windows"]["mft"]["attribute"]]
+        if not isinstance(data, str) and not any(
+            isinstance(
+                attribute.get("header", {}).get("residential_header", {}).get(field),
+                int,
+            )
+            for attribute in attributes
+            for field in ("vnc_first", "vnc_last")
+        ):
+            # Bulk serialization does not mutate its source. Most Timeline
+            # events need no conversion, so avoid copying their whole tree.
+            return record
+
+        source = deepcopy(record)
         if isinstance(data, str):
             # Resident and non-resident DATA must share one object mapping.
             source["attributes"]["DATA"]["data"] = {"resident_data": data}

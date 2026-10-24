@@ -96,16 +96,52 @@ def create_timeline_record(
     mft_file_path: str,
     tags: Optional[List[str]] = None,
 ) -> dict:
-    base_tags = build_tags(tags)
-
     attr_data = attribute.get("data", {})
+    timestamp_fields = MACB_MAPPING.values()
+    return _create_timeline_record(
+        record,
+        attr_type,
+        macb_type,
+        attr_data.get(timestamp_field),
+        mft_file_path,
+        _timeline_record_context(record, filepath, tags),
+        {k: v for k, v in attribute.get("header", {}).items() if k != "type_code"},
+        {k: v for k, v in attr_data.items() if k not in timestamp_fields},
+        f"mft-{attr_type.lower()}-{macb_type.lower()}",
+    )
+
+
+def _timeline_record_context(record, filepath, tags):
+    """Prepare record fields once without sharing output containers."""
     record_header = record.get("header", {})
-    attr_header = attribute.get("header", {})
+    return (
+        {
+            "number": record_header.get("record_number", 0),
+            "name": ntpath.basename(filepath) if filepath else "",
+            "path": filepath,
+        },
+        {k: v for k, v in record_header.items() if k != "record_number"},
+        build_tags(tags),
+    )
+
+
+def _create_timeline_record(
+    record,
+    attr_type,
+    macb_type,
+    timestamp,
+    mft_file_path,
+    context,
+    attr_header,
+    attr_data,
+    action,
+):
+    record_fields, record_header, base_tags = context
 
     result = {
-        "@timestamp": attr_data.get(timestamp_field),
+        "@timestamp": timestamp,
         "event": {
-            "action": f"mft-{attr_type.lower()}-{macb_type.lower()}",
+            "action": action,
             "category": ["file"],
             "type": [MACB_EVENT_TYPE_MAPPING[macb_type]],
             "kind": "event",
@@ -115,30 +151,18 @@ def create_timeline_record(
         },
         "windows": {
             "mft": {
-                "record": {
-                    "number": record_header.get("record_number", 0),
-                    "name": ntpath.basename(filepath) if filepath else "",
-                    "path": filepath,
-                },
-                "header": {
-                    k: v for k, v in record_header.items() if k != "record_number"
-                },
+                "record": record_fields.copy(),
+                "header": record_header.copy(),
                 "attribute": {
                     "type": attr_type,
                     "macb_type": macb_type,
-                    "header": {
-                        k: v for k, v in attr_header.items() if k != "type_code"
-                    },
-                    "data": {
-                        k: v
-                        for k, v in attr_data.items()
-                        if k not in MACB_MAPPING.values()
-                    },
+                    "header": attr_header.copy(),
+                    "data": attr_data.copy(),
                 },
             },
         },
         "log": {"file": {"path": mft_file_path}},
-        "tags": base_tags,
+        "tags": base_tags.copy(),
     }
     if "valid_fixup" in record:
         result["windows"]["mft"]["valid_fixup"] = record["valid_fixup"]
@@ -155,18 +179,36 @@ def create_macb_records_for_attribute(
 ) -> List[dict]:
     if not attribute or "data" not in attribute:
         return []
+    return _macb_records_for_attribute(
+        record,
+        attribute,
+        attr_type,
+        mft_file_path,
+        _timeline_record_context(record, filepath, tags),
+    )
+
+
+def _macb_records_for_attribute(record, attribute, attr_type, mft_file_path, context):
+    attr_data = attribute["data"]
+    attr_header = {
+        k: v for k, v in attribute.get("header", {}).items() if k != "type_code"
+    }
+    timestamp_fields = MACB_MAPPING.values()
+    data = {k: v for k, v in attr_data.items() if k not in timestamp_fields}
+    action_prefix = f"mft-{attr_type.lower()}-"
 
     records = []
     for macb_type, timestamp_field in MACB_MAPPING.items():
-        timeline_record = create_timeline_record(
+        timeline_record = _create_timeline_record(
             record,
-            attribute,
             attr_type,
             macb_type,
-            timestamp_field,
-            filepath,
+            attr_data.get(timestamp_field),
             mft_file_path,
-            tags,
+            context,
+            attr_header,
+            data,
+            action_prefix + macb_type.lower(),
         )
         records.append(timeline_record)
 
@@ -177,13 +219,18 @@ def format_timeline_records(
     record: dict, filepath: str, mft_file_path: str, tags: Optional[List[str]] = None
 ) -> List[dict]:
     timeline_records = []
+    context = None
 
     for attribute in record.get("attributes", []):
         attr_type = attribute.get("header", {}).get("type_code")
         if attr_type not in TIMELINE_ATTRIBUTES:
             continue
-        macb_records = create_macb_records_for_attribute(
-            record, attribute, attr_type, filepath, mft_file_path, tags
+        if "data" not in attribute:
+            continue
+        if context is None:
+            context = _timeline_record_context(record, filepath, tags)
+        macb_records = _macb_records_for_attribute(
+            record, attribute, attr_type, mft_file_path, context
         )
         timeline_records.extend(macb_records)
 
