@@ -10,11 +10,11 @@ authors = [
 requires-python = ">=3.11"
 
 dependencies = [
-    "elasticsearch>=9.5.1",
-    "mft>=0.7.0",
-    "orjson>=3.13.0",
+    "elasticsearch==9.5.1",
+    "orjson==3.13.0",
     "tqdm>=4.70.1",
     "urllib3>=2.8.0",
+    "mft>=0.7.0",
 ]
 
 [build-system]
@@ -26,11 +26,11 @@ path = "src/mft2es/__about__.py"
 
 [dependency-groups]
 dev = [
-    "black>=26.10.1",
+    "black==26.10.1",
     "flake8>=7.4.1",
-    "mypy>=2.4.0",
-    "nuitka==4.3",
-    "pytest>=9.1.1",
+    "mypy==2.4.0",
+    "nuitka[onefile]==4.3",
+    "pytest==9.1.1",
 ]
 
 [project.scripts]

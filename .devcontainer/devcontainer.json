@@ -1,9 +1,9 @@
 {
     "name": "dev",
     "dockerComposeFile": "docker-compose.yaml",
+    "service": "dev",
     "remoteUser": "dev",
-	"service": "dev",
-	"workspaceFolder": "/workspace/",
+    "workspaceFolder": "/workspace",
     "postCreateCommand": "/usr/bin/fish ./.devcontainer/postCreateCommands.fish",
     "customizations": {
         "vscode": {
@@ -20,7 +20,8 @@
                     "editor.codeActionsOnSave": {
                         "source.organizeImports": "explicit"
                     }
-                }
+                },
+                "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
             }
         }
     }

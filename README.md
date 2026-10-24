@@ -81,9 +81,9 @@ $ mft2es /mftfiles/ # The path is recursively expanded to all MFT and $MFT files
 --pipeline:
   Elasticsearch ingest pipeline to use (default: )
 
---timeline:
-  Enable MACB timeline analysis mode
-  (default: False)
+--timeline, --no-timeline:
+  Generate MACB timeline records (default: True).
+  Use --no-timeline for Standard records.
 
 --tags:
   Comma-separated tags to add to each record
@@ -176,7 +176,7 @@ result: list[dict] = mft2json("/path/to/your/$MFT")
 
 ### Timeline Analysis
 
-mft2es supports timeline analysis mode that creates MACB (Modified, Accessed, Changed, Birth) timeline records for forensic investigation.
+mft2es creates MACB (Modified, Accessed, Changed, Birth) timeline records by default.
 
 ```bash
 $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline

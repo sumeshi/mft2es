@@ -31,10 +31,11 @@ def test_parser_stays_on_owner_thread_with_bounded_ordered_work(monkeypatch, tim
 
     def worker(args):
         assert threading.get_ident() != owner
-        j, c, path, mode, tags = args
+        j, c, path, mode, tags, offset = args
         assert mode == timeline
         assert tags == ["test"]
-        return [int(value) for value in j]
+        assert offset == int(j[0])
+        return [int(value) for value in j], []
 
     parser = module.Mft2es.__new__(module.Mft2es)
     parser.path = Path("unused")

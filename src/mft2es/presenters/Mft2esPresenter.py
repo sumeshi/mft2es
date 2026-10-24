@@ -4,7 +4,7 @@ from typing import List, Optional, Union
 
 from tqdm import tqdm
 
-from mft2es.models.Mft2es import Mft2es, validate_chunk_size
+from mft2es.models.Mft2es import Mft2es, PartialExtractionError, validate_chunk_size
 from mft2es.models.ElasticsearchUtils import ElasticsearchUtils
 
 
@@ -28,7 +28,7 @@ class Mft2esPresenter(object):
         multiprocess: bool = False,
         chunk_size: int = 500,
         logger=None,
-        timeline_mode: bool = False,
+        timeline_mode: bool = True,
         tags: Optional[Union[str, List[str]]] = None,
         verify_certs: bool = True,
         ca_certs: str | None = None,
@@ -85,6 +85,8 @@ class Mft2esPresenter(object):
                         f"Failed to process MFT input {self.input_path}: {error}"
                     ) from error
                 yield batch
+            if mft2es_instance.diagnostics:
+                raise PartialExtractionError(mft2es_instance.diagnostics)
         finally:
             try:
                 if progress is not None and progress is not records:

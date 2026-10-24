@@ -1,5 +1,7 @@
 # coding: utf-8
-from hashlib import md5, sha256
+from collections import Counter
+from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -7,20 +9,45 @@ import pytest
 from mft2es.views.Mft2esView import entry_point as m2e
 from mft2es.views.Mft2jsonView import entry_point as m2j
 
+# Fixed sample, mft 0.7.0: all FileName attributes, MACB types and fixup status.
+STANDARD_DIGEST = "33ff06138925af344de484f1883f8823d250fa160ce562b2cac0d875e9ac94c2"
+TIMELINE_DIGEST = "489ce05ab060b3f20822fb57176a13fe6093dce975f87bc1a5f902d840637d75"
 
-# utils
-def calc_md5(path: Path) -> str:
-    if path.is_dir():
-        return ""
-    else:
-        return md5(path.read_bytes()).hexdigest()
+
+def canonical_digest(records: list[dict], *, timeline: bool = False) -> str:
+    """Check every field and record order without host paths or JSON key order."""
+    checksum = sha256()
+    for original in records:
+        record = deepcopy(original)
+        if timeline:
+            assert record["log"]["file"]["path"] == str(
+                Path("tests/cache/MFT").resolve()
+            )
+            record["log"]["file"]["path"] = "MFT"
+            entry = record["windows"]["mft"]["record"]
+            entry["path"] = entry["path"].replace("\\", "/")
+        else:
+            filename = record["attributes"].get("FileName")
+            if filename is not None:
+                filename["data"]["path"] = filename["data"]["path"].replace("\\", "/")
+        checksum.update(
+            json.dumps(
+                record, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+            ).encode("utf-8")
+        )
+        checksum.update(b"\n")
+    return checksum.hexdigest()
+
+
+def assert_standard_content(path: str) -> None:
+    records = json.loads(Path(path).read_bytes())
+    assert len(records) == 13068
+    assert canonical_digest(records) == STANDARD_DIGEST
 
 
 def assert_timeline_content(path: str) -> None:
-    # The prepare_mft fixture downloads an external sample; do not invoke this
-    # integration test during offline validation.
     records = json.loads(Path(path).read_bytes())
-    assert len(records) == 104496
+    assert len(records) == 126280
 
     expected_event_types = {
         "M": "modify",
@@ -28,21 +55,68 @@ def assert_timeline_content(path: str) -> None:
         "C": "change",
         "B": "creation",
     }
+    attribute_counts = Counter()
     for record in records:
-        macb_type = record["windows"]["mft"]["attribute"]["macb_type"]
+        mft = record["windows"]["mft"]
+        macb_type = mft["attribute"]["macb_type"]
         assert record["event"]["type"] == [expected_event_types[macb_type]]
-        # The committed canonical digest predates the MACB event.type fix.
-        # Normalize only that changed field so the hash still checks all
-        # unaffected output fields against the previously verified sample.
-        record["event"]["type"] = ["change"]
+        assert mft["valid_fixup"] is True
+        attribute_counts[mft["attribute"]["type"], macb_type] += 1
+    assert attribute_counts == {
+        (attribute, macb): count
+        for attribute, count in (("StandardInformation", 13064), ("FileName", 18506))
+        for macb in "MACB"
+    }
+    assert canonical_digest(records, timeline=True) == TIMELINE_DIGEST
 
-    canonical = json.dumps(
-        sorted(records, key=lambda record: json.dumps(record, sort_keys=True)),
-        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-    ).encode()
-    assert sha256(canonical).hexdigest() == (
-        "0a41c56bcdcbcd58730915f4cd868c780e0783dd1307db38549b54091c360da9"
+
+def timeline_digest_example() -> dict:
+    return {
+        "event": {"type": ["modify"]},
+        "windows": {
+            "mft": {
+                "record": {"path": "folder/name"},
+                "valid_fixup": True,
+            }
+        },
+        "log": {"file": {"path": str(Path("tests/cache/MFT").resolve())}},
+    }
+
+
+def test_native_sample_digest_keeps_record_order():
+    records = [{"attributes": {}, "number": number} for number in (1, 2)]
+    assert canonical_digest(records) != canonical_digest(list(reversed(records)))
+
+
+@pytest.mark.parametrize("field", ["valid_fixup", "event.type"])
+def test_native_sample_digest_keeps_timeline_fields(field):
+    original = timeline_digest_example()
+    changed = deepcopy(original)
+    if field == "valid_fixup":
+        changed["windows"]["mft"][field] = False
+    else:
+        changed["event"]["type"] = ["change"]
+    assert canonical_digest([original], timeline=True) != canonical_digest(
+        [changed], timeline=True
     )
+
+
+def test_native_sample_digest_normalizes_only_path_separators():
+    original = timeline_digest_example()
+    changed = deepcopy(original)
+    changed["windows"]["mft"]["record"]["path"] = "folder\\name"
+    before = deepcopy(changed)
+    assert canonical_digest([original], timeline=True) == canonical_digest(
+        [changed], timeline=True
+    )
+    assert changed == before
+
+
+def test_native_sample_digest_checks_evidence_path():
+    changed = timeline_digest_example()
+    changed["log"]["file"]["path"] = "wrong/MFT"
+    with pytest.raises(AssertionError):
+        canonical_digest([changed], timeline=True)
 
 
 # command-line test cases
@@ -86,21 +160,21 @@ def test__mft2json_version(monkeypatch):
 @pytest.mark.usefixtures("prepare_mft")
 def test__mft2json_convert(monkeypatch):
     path = "tests/cache/MFT.json"
-    argv = ["mft2json", "-o", path, "tests/cache/MFT"]
+    argv = ["mft2json", "--no-timeline", "-o", path, "tests/cache/MFT"]
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "b3e228a56fd310dcbcb6ffc6e332cba9"
+    assert_standard_content(path)
 
 
 @pytest.mark.usefixtures("prepare_mft")
 def test__mft2json_convert_multiprocessing(monkeypatch):
     path = "tests/cache/MFT-m.json"
-    argv = ["mft2json", "-o", path, "-m", "tests/cache/MFT"]
+    argv = ["mft2json", "--no-timeline", "-o", path, "-m", "tests/cache/MFT"]
     with monkeypatch.context() as m:
         m.setattr("sys.argv", argv)
         m2j()
-    assert calc_md5(Path(path)) == "b3e228a56fd310dcbcb6ffc6e332cba9"
+    assert_standard_content(path)
 
 
 @pytest.mark.usefixtures("prepare_mft")
@@ -176,6 +250,8 @@ def test__mft2json_library_closes_mft(monkeypatch):
     closed = False
 
     class DummyMft:
+        diagnostics = []
+
         def __init__(self, _path):
             pass
 

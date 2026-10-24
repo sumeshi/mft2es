@@ -103,10 +103,10 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-.flake8
-
 MFT
 MFT.json
 
-.claude
+GOAL.md
 TASKS.md
+.serena
+.tokensave

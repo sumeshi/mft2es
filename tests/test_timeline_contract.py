@@ -59,6 +59,37 @@ def test_timeline_macb_mapping_covers_all_four_types():
     }
 
 
+@pytest.mark.parametrize(
+    ("present", "valid_fixup"),
+    [(True, True), (True, False), (True, None), (False, None)],
+)
+def test_timeline_preserves_fixup_status_for_every_macb_event(present, valid_fixup):
+    record = {
+        "header": {"record_number": 7},
+        "attributes": [
+            {"header": {"type_code": kind}, "data": {}}
+            for kind in ("StandardInformation", "FileName")
+        ],
+    }
+    baseline = format_timeline_records(record, "sample.txt", "MFT")
+    if present:
+        record["valid_fixup"] = valid_fixup
+
+    records = format_timeline_records(record, "sample.txt", "MFT")
+
+    assert len(records) == 8
+    for document in records:
+        metadata = document["windows"]["mft"]
+        if present:
+            assert metadata.pop("valid_fixup") is valid_fixup
+        else:
+            assert "valid_fixup" not in metadata
+    assert records == baseline
+    assert ("valid_fixup" in record) is present
+    if present:
+        assert record["valid_fixup"] is valid_fixup
+
+
 def test_timeline_keeps_repeated_filename_attributes():
     record = {
         "header": {"record_number": 7},
@@ -203,11 +234,20 @@ def test_csv_reader_matches_record_ids_and_rejects_misalignment(timeline):
     }
     wrong_id_row = b"FILE,8,0,0,C:/wrong.txt"
 
-    with pytest.raises(ValueError, match="record 7"):
-        if timeline:
-            process_timeline_by_chunk([json.dumps(record)], [wrong_id_row], "MFT")
-        else:
-            process_standard_by_chunk([json.dumps(record)], [wrong_id_row])
+    diagnostics = []
+    if timeline:
+        output = process_timeline_by_chunk(
+            [json.dumps(record)], [wrong_id_row], "MFT", diagnostics=diagnostics
+        )
+    else:
+        output = process_standard_by_chunk(
+            [json.dumps(record)], [wrong_id_row], diagnostics=diagnostics
+        )
+    assert output == []
+    assert len(diagnostics) == 1
+    assert diagnostics[0]["record_number"] == 7
+    assert diagnostics[0]["stage"] == "csv"
+    assert "record 7" in diagnostics[0]["error"]
 
     with pytest.raises(RuntimeError, match="chunk lengths"):
         if timeline:
@@ -447,7 +487,7 @@ def test_json_and_jsonl_keep_same_record_schema(
 
     class Parser:
         def __init__(self, _path):
-            pass
+            self.diagnostics = []
 
         def gen_timeline_records(self, **_kwargs):
             assert _kwargs["timeline_mode"] is timeline_mode
@@ -489,7 +529,7 @@ def test_public_mft2json_api_preserves_additional_tags_input(
 
     class Parser:
         def __init__(self, _path):
-            pass
+            self.diagnostics = []
 
         def gen_timeline_records(self, **kwargs):
             yield [

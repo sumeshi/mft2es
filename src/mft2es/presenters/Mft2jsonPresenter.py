@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 import orjson
 from tqdm import tqdm
 
-from mft2es.models.Mft2es import Mft2es, validate_chunk_size
+from mft2es.models.Mft2es import Mft2es, PartialExtractionError, validate_chunk_size
 
 
 class Mft2jsonPresenter(object):
@@ -21,7 +21,7 @@ class Mft2jsonPresenter(object):
         is_quiet: bool = False,
         multiprocess: bool = False,
         chunk_size: int = 500,
-        timeline_mode: bool = False,
+        timeline_mode: bool = True,
         tags: Optional[Union[str, List[str]]] = None,
         output_format: str = "json",
     ):
@@ -62,6 +62,7 @@ class Mft2jsonPresenter(object):
         records = None
         progress = None
         temporary_path = None
+        record_count = 0
         try:
             records = r.gen_timeline_records(
                 multiprocess=self.multiprocess,
@@ -79,9 +80,11 @@ class Mft2jsonPresenter(object):
             ) as output:
                 temporary_path = Path(output.name)
                 if self.output_format == "json":
+                    documents = list(chain.from_iterable(progress))
+                    record_count = len(documents)
                     output.write(
                         orjson.dumps(
-                            list(chain.from_iterable(progress)),
+                            documents,
                             option=orjson.OPT_INDENT_2,
                         )
                     )
@@ -89,13 +92,18 @@ class Mft2jsonPresenter(object):
                     for chunk in progress:
                         for record in chunk:
                             output.write(orjson.dumps(record) + b"\n")
+                            record_count += 1
                         output.flush()
+            if r.diagnostics and record_count == 0:
+                raise PartialExtractionError(r.diagnostics)
             self._check_output_path()
             if os.name == "posix" and self.output_path.exists():
                 temporary_path.chmod(
                     stat.S_IMODE(self.output_path.stat().st_mode)
                 )
             os.replace(temporary_path, self.output_path)
+            if r.diagnostics:
+                raise PartialExtractionError(r.diagnostics)
         finally:
             try:
                 if progress is not None and progress is not records:

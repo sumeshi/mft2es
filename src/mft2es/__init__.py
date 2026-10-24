@@ -4,10 +4,10 @@ from itertools import chain
 from pathlib import Path
 
 from mft2es.__about__ import __version__
-from mft2es.models.Mft2es import Mft2es, validate_chunk_size
+from mft2es.models.Mft2es import Mft2es, PartialExtractionError, validate_chunk_size
 from mft2es.presenters.Mft2esPresenter import Mft2esPresenter
 
-__all__ = ["__version__", "mft2es", "mft2json"]
+__all__ = ["__version__", "mft2es", "mft2json", "PartialExtractionError"]
 
 
 def mft2es(
@@ -21,7 +21,7 @@ def mft2es(
     pwd: str = "",
     multiprocess: bool = False,
     chunk_size: int = 500,
-    timeline_mode: bool = False,
+    timeline_mode: bool = True,
     additional_tags: Optional[List[str]] = None,
     verify_certs: bool = True,
 ) -> None:
@@ -58,7 +58,7 @@ def mft2es(
             Number of records to process in each chunk.
 
         timeline_mode (bool, optional):
-            Enable timeline analysis mode. This creates specialized records
+            Enable timeline analysis mode (default: True). This creates specialized records
             for Standard Information and FileName attributes.
 
         additional_tags (Optional[List[str]], optional):
@@ -90,7 +90,7 @@ def mft2json(
     filepath: str,
     multiprocess: bool = False,
     chunk_size: int = 500,
-    timeline_mode: bool = False,
+    timeline_mode: bool = True,
     additional_tags: Optional[List[str]] = None,
 ) -> List[dict]:
     """Convert a Windows MFT file to a list of dictionaries.
@@ -99,7 +99,7 @@ def mft2json(
         filepath (str): Input MFT file.
         multiprocess (bool): Flag to run multiprocessing.
         chunk_size (int): Number of records to process in each chunk.
-        timeline_mode (bool): Enable timeline analysis mode.
+        timeline_mode (bool): Enable timeline analysis mode (default: True).
         additional_tags (Optional[List[str]], optional):
             Tags to add to each record.
 
@@ -120,6 +120,8 @@ def mft2json(
                 )
             )
         )
-        return records
     finally:
         mft.close()
+    if mft.diagnostics:
+        raise PartialExtractionError(mft.diagnostics, records)
+    return records

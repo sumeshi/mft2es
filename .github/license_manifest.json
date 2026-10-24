@@ -1,0 +1,27 @@
+{
+  "project_name": "mft2es",
+  "standalone_distributions": [
+    "sniffio",
+    "idna",
+    "anyio",
+    "typing-extensions",
+    "six",
+    "python-dateutil",
+    "certifi",
+    "elastic-transport",
+    "elasticsearch",
+    "mft",
+    "orjson",
+    "tqdm",
+    "urllib3"
+  ],
+  "notices": [],
+  "license_files": [],
+  "fallbacks": [
+    {
+      "distribution": "mft",
+      "version": "0.7.0",
+      "path": "LICENSES/mft-0.7.0.txt"
+    }
+  ]
+}

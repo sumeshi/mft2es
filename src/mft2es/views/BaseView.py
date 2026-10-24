@@ -1,8 +1,10 @@
 # coding: utf-8
 import argparse
 from abc import ABCMeta, abstractmethod
+from typing import List, Optional
 
-from mft2es.__about__ import __version__
+from ..__about__ import __version__
+from .ArtifactOptions import ArtifactOptions
 
 
 def positive_int(value: str) -> int:
@@ -12,42 +14,37 @@ def positive_int(value: str) -> int:
     return number
 
 
-class BaseView(metaclass=ABCMeta):
-
+class BaseView(ArtifactOptions, metaclass=ABCMeta):
     def __init__(self):
         self.parser = argparse.ArgumentParser(allow_abbrev=False)
         self.__define_common_options()
+        self._define_artifact_options()
 
     def __define_common_options(self):
         self.parser.add_argument(
             "--version", "-v", action="version", version=__version__
         )
         self.parser.add_argument(
-            "--quiet",
-            "-q",
-            action="store_true",
-            help="Suppress standard output.",
+            "--quiet", "-q", action="store_true", help="Suppress standard output."
         )
-        self.parser.add_argument(
-            "--multiprocess",
-            "-m",
-            action="store_true",
-            help="Enable multiprocessing.",
-        )
+        if self.supports_multiprocessing:
+            self.parser.add_argument(
+                "--multiprocess",
+                "-m",
+                action="store_true",
+                help="Enable multiprocessing.",
+            )
         self.parser.add_argument(
             "--size",
             "-s",
             type=positive_int,
             default=500,
-            help="Number of records to process in each chunk.",
+            help="Batch size (default: 500).",
         )
         self.parser.add_argument(
             "--tags",
             default="",
-            help=(
-                "Comma-separated tags to add to each record "
-                "(e.g., WORKSTATION-1, DOMAIN-ABC)."
-            ),
+            help="Comma-separated tags to add to each record.",
         )
 
     @abstractmethod
@@ -56,7 +53,7 @@ class BaseView(metaclass=ABCMeta):
 
     @staticmethod
     def _dispatch_python_command(command: str) -> bool:
-        """Run only known multiprocessing helper commands used by frozen builds."""
+        """Dispatch only known multiprocessing helper commands in frozen builds."""
         import ast
         import importlib
 
@@ -139,3 +136,10 @@ class BaseView(metaclass=ABCMeta):
     def log(self, message: str, is_quiet: bool):
         if not is_quiet:
             print(message)
+
+    def parse_tags(self) -> Optional[List[str]]:
+        """Parse the common comma-separated tag option."""
+        if not self.args.tags:
+            return None
+        tags = [tag.strip() for tag in self.args.tags.split(",")]
+        return [tag for tag in tags if tag]

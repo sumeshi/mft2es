@@ -22,7 +22,7 @@ $ cd mft2es
 
 ```bash
 $ pip install uv
-$ uv sync --dev
+$ uv sync --locked
 ```
 
 **Editor**: This project is developed using Cursor with custom rules (currently being organized).
@@ -30,7 +30,7 @@ $ uv sync --dev
 ### Running Tests
 
 ```bash
-$ uv run pytest
+$ uv run --locked pytest
 ```
 
 ### Code Style
