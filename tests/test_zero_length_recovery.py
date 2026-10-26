@@ -163,7 +163,7 @@ def test_native_parent_path_lookup_does_not_shift_stream_pairing(tmp_path):
     )
     result = _probe(source, chunk_size=1)
     assert _numbers(result["records"]) == [0, 2]
-    paths = [r["attributes"]["FileName"]["data"]["path"] for r in result["records"]]
+    paths = [r["attributes"]["FileName"][-1]["data"]["path"] for r in result["records"]]
     assert "[Unknown]" in paths[0] and paths[0].endswith("child.txt")
     assert paths[1].endswith("last.txt")
     assert len(result["diagnostics"]) == 1

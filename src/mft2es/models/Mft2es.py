@@ -244,26 +244,22 @@ def format_standard_record(
 
     attributes = {}
     for attribute in record.get("attributes"):
-        attributes[attribute.get("header").get("type_code")] = attribute
+        attr_type = attribute.get("header").get("type_code")
+        attributes.setdefault(attr_type, []).append(attribute)
     record["attributes"] = attributes
 
-    if "FileName" in record["attributes"]:
-        filepath = filepath
-        record["attributes"]["FileName"]["data"]["path"] = filepath
+    if "FileName" in attributes:
+        # CSV supplies one path per record. Keep its existing association with
+        # the last FileName rather than assigning it to every name or parent.
+        attributes["FileName"][-1]["data"]["path"] = filepath
 
-    for v in ("DATA", "BITMAP"):
-        for attribute in ("vnc_first", "vnc_last"):
-            vnc = (
-                record.get("attributes", dict())
-                .get(v, dict())
-                .get("header", dict())
-                .get("residential_header", dict())
-                .get(attribute)
-            )
-            if vnc:
-                record["attributes"][v]["header"]["residential_header"][attribute] = (
-                    hex(vnc)
-                )
+    for attr_type in ("DATA", "BITMAP"):
+        for attribute in attributes.get(attr_type, []):
+            header = attribute.get("header", {}).get("residential_header", {})
+            for field in ("vnc_first", "vnc_last"):
+                vnc = header.get(field)
+                if vnc:
+                    header[field] = hex(vnc)
 
     record["tags"] = base_tags
 

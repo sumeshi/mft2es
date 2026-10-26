@@ -1,6 +1,7 @@
 """MFT-specific Elasticsearch source conversions; input and IDs stay intact."""
 
 from copy import deepcopy
+from itertools import chain
 
 
 class ElasticsearchAdapter:
@@ -11,11 +12,13 @@ class ElasticsearchAdapter:
         return records
 
     def prepare_source(self, record):
-        data = record.get("attributes", {}).get("DATA", {}).get("data")
-        attributes = record.get("attributes", {}).values()
+        data_attributes = record.get("attributes", {}).get("DATA", [])
+        attributes = chain.from_iterable(record.get("attributes", {}).values())
         if "windows" in record:
             attributes = [record["windows"]["mft"]["attribute"]]
-        if not isinstance(data, str) and not any(
+        if not any(
+            isinstance(attribute.get("data"), str) for attribute in data_attributes
+        ) and not any(
             isinstance(
                 attribute.get("header", {}).get("residential_header", {}).get(field),
                 int,
@@ -28,11 +31,12 @@ class ElasticsearchAdapter:
             return record
 
         source = deepcopy(record)
-        if isinstance(data, str):
-            # Resident and non-resident DATA must share one object mapping.
-            source["attributes"]["DATA"]["data"] = {"resident_data": data}
+        for attribute in source.get("attributes", {}).get("DATA", []):
+            if isinstance(attribute.get("data"), str):
+                # Resident and non-resident DATA must share one object mapping.
+                attribute["data"] = {"resident_data": attribute["data"]}
         # Unsigned VCNs, including sentinels, can exceed signed long range.
-        attributes = source.get("attributes", {}).values()
+        attributes = chain.from_iterable(source.get("attributes", {}).values())
         if "windows" in source:
             attributes = [source["windows"]["mft"]["attribute"]]
         for attribute in attributes:

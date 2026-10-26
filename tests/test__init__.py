@@ -9,8 +9,8 @@ import pytest
 from mft2es.views.Mft2esView import entry_point as m2e
 from mft2es.views.Mft2jsonView import entry_point as m2j
 
-# Fixed sample, mft 0.7.0: all FileName attributes, MACB types and fixup status.
-STANDARD_DIGEST = "33ff06138925af344de484f1883f8823d250fa160ce562b2cac0d875e9ac94c2"
+# Fixed sample, mft 0.7.0: all Standard attributes and unchanged Timeline fields.
+STANDARD_DIGEST = "56b83066f4de80b9ee4415d094b5e229a554e48d1636f92f04f338ca32518a65"
 TIMELINE_DIGEST = "489ce05ab060b3f20822fb57176a13fe6093dce975f87bc1a5f902d840637d75"
 
 
@@ -27,8 +27,11 @@ def canonical_digest(records: list[dict], *, timeline: bool = False) -> str:
             entry = record["windows"]["mft"]["record"]
             entry["path"] = entry["path"].replace("\\", "/")
         else:
-            filename = record["attributes"].get("FileName")
-            if filename is not None:
+            filenames = record["attributes"].get("FileName", [])
+            if filenames:
+                # The native CSV resolves one path per record. It is attached
+                # only to the last FileName, matching the previous selection.
+                filename = filenames[-1]
                 filename["data"]["path"] = filename["data"]["path"].replace("\\", "/")
         checksum.update(
             json.dumps(

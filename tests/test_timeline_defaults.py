@@ -1,4 +1,4 @@
-"""Timeline defaults and the explicit Standard compatibility path."""
+"""Timeline defaults and the explicit Standard mode."""
 
 import importlib
 import json
@@ -29,7 +29,7 @@ def test_public_json_api_defaults_to_timeline_and_keeps_standard(
     assert len(records) == (4 if timeline else 1)
     assert all(("windows" in record) is timeline for record in records)
     if not timeline:
-        assert records[0]["attributes"]["FileName"]["data"]["path"].endswith(
+        assert records[0]["attributes"]["FileName"][-1]["data"]["path"].endswith(
             "sample.txt"
         )
 

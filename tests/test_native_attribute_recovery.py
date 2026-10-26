@@ -153,7 +153,7 @@ def test_native_failures_recover_records_and_report_partial_extraction(
             (
                 record["windows"]["mft"]["record"]["path"]
                 if timeline
-                else record["attributes"]["FileName"]["data"]["path"]
+                else record["attributes"]["FileName"][-1]["data"]["path"]
             )
             for record in result["records"]
         ]
@@ -178,7 +178,7 @@ def test_named_and_unnamed_attribute_lists_follow_native_content_cursor(
     assert result["partial"] is (entry_length == 0)
     assert _numbers(result["records"]) == ([1] if entry_length == 0 else [0, 1])
     if entry_length:
-        attribute = result["records"][0]["attributes"]["AttributeList"]
+        attribute = result["records"][0]["attributes"]["AttributeList"][-1]
         assert attribute["header"]["name"] == ("x" if named else "")
         assert attribute["data"]["entries"][0]["record_length"] == 26
     assert source.read_bytes() == payload + _record(1, "last.txt")
@@ -204,7 +204,7 @@ def test_bad_attribute_keeps_other_attributes_from_the_same_record(tmp_path, tim
     filename = (
         middle["windows"]["mft"]["attribute"]["data"]["name"]
         if timeline
-        else middle["attributes"]["FileName"]["data"]["name"]
+        else middle["attributes"]["FileName"][-1]["data"]["name"]
     )
     assert filename == "retained.txt"
     assert len(result["diagnostics"]) == 1
@@ -222,7 +222,8 @@ def test_changing_only_the_cyclic_parent_to_root_is_successful(tmp_path):
     assert result["partial"] is False
     assert _numbers(result["records"]) == [0, 1, 2]
     paths = [
-        record["attributes"]["FileName"]["data"]["path"] for record in result["records"]
+        record["attributes"]["FileName"][-1]["data"]["path"]
+        for record in result["records"]
     ]
     assert [path.replace("\\", "/") for path in paths] == [
         "2.txt/1.txt/0.txt",
@@ -250,7 +251,8 @@ def test_long_parent_chain_checks_for_cycles_before_native_recursion(tmp_path, c
     assert result["partial"] is cyclic
     assert _numbers(result["records"]) == [0, *range(first, last + 1)]
     paths = [
-        record["attributes"]["FileName"]["data"]["path"] for record in result["records"]
+        record["attributes"]["FileName"][-1]["data"]["path"]
+        for record in result["records"]
     ]
     if cyclic:
         assert any(error["stage"] == "path" for error in result["diagnostics"])
@@ -312,7 +314,7 @@ def test_filename_self_reference_and_base_self_reference_have_distinct_behavior(
     else:
         assert (
             "[Orphaned]"
-            in result["records"][1]["attributes"]["FileName"]["data"]["path"]
+            in result["records"][1]["attributes"]["FileName"][-1]["data"]["path"]
         )
     assert source.read_bytes() == payload
 

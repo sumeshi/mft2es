@@ -187,6 +187,8 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
 
 ### Standard Mode
 
+Attributes are grouped by type in arrays, including singletons.
+
 ```json
 [
   {
@@ -214,7 +216,7 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
       "record_number": 0
     },
     "attributes": {
-      "StandardInformation": {
+      "StandardInformation": [{
         "header": {
           "type_code": "StandardInformation",
           "record_length": 96,
@@ -242,8 +244,8 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "quota": 0,
           "usn": 0
         }
-      },
-      "FileName": {
+      }],
+      "FileName": [{
         "header": {
           "type_code": "FileName",
           "record_length": 104,
@@ -275,8 +277,8 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "name": "$MFT",
           "path": "$MFT"
         }
-      },
-      "DATA": {
+      }],
+      "DATA": [{
         "header": {
           "type_code": "DATA",
           "record_length": 72,
@@ -297,8 +299,8 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "name": ""
         },
         "data": null
-      },
-      "BITMAP": {
+      }],
+      "BITMAP": [{
         "header": {
           "type_code": "BITMAP",
           "record_length": 80,
@@ -319,7 +321,7 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "name": ""
         },
         "data": null
-      }
+      }]
     },
     "tags": ["mft", "WORKSTATION-1", "DOMAIN-ABC"]
   },

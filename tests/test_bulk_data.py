@@ -11,7 +11,7 @@ def test_mixed_data_preserves_values_input_and_ids(monkeypatch):
     monkeypatch.setattr(module, "Elasticsearch", MagicMock())
     client = module.ElasticsearchUtils("localhost", 9200, "http", "", "")
     records = [
-        {"attributes": {"DATA": {"data": value}}}
+        {"attributes": {"DATA": [{"data": value}]}}
         for value in ["resident\n日本語", {"data_runs": []}, "", None]
     ] + [{"@timestamp": "2020-01-01T00:00:00Z"}]
     original = deepcopy(records)
@@ -26,10 +26,10 @@ def test_mixed_data_preserves_values_input_and_ids(monkeypatch):
     assert records == original
     for record, action in zip(original, captured):
         assert action["_id"] == client.calc_hash(record)
-    assert captured[0]["_source"]["attributes"]["DATA"]["data"] == {
+    assert captured[0]["_source"]["attributes"]["DATA"][0]["data"] == {
         "resident_data": "resident\n日本語"
     }
-    assert captured[2]["_source"]["attributes"]["DATA"]["data"] == {
+    assert captured[2]["_source"]["attributes"]["DATA"][0]["data"] == {
         "resident_data": ""
     }
     for i in (1, 3, 4):
@@ -45,7 +45,7 @@ def test_unsigned_vcn_preserved_without_long_overflow(monkeypatch, timeline):
         "vnc_first": 0, "vnc_last": 2**64 - 1
     }}}
     record = ({"windows": {"mft": {"attribute": attribute}}} if timeline else
-              {"attributes": {"IndexAllocation": attribute}})
+              {"attributes": {"IndexAllocation": [attribute]}})
     original = deepcopy(record)
     captured = []
 
@@ -57,12 +57,64 @@ def test_unsigned_vcn_preserved_without_long_overflow(monkeypatch, timeline):
     client.bulk_indice([record], "test", "")
     source = captured[0]["_source"]
     normalized = (source["windows"]["mft"]["attribute"] if timeline else
-                  source["attributes"]["IndexAllocation"])
+                  source["attributes"]["IndexAllocation"][0])
     assert normalized["header"]["residential_header"] == {
         "vnc_first": "0x0", "vnc_last": "0xffffffffffffffff"
     }
     assert record == original
     assert captured[0]["_id"] == client.calc_hash(original)
+
+
+def test_multiple_attributes_keep_values_order_and_hash(monkeypatch):
+    module = importlib.import_module("mft2es.models.ElasticsearchUtils")
+    monkeypatch.setattr(module, "Elasticsearch", MagicMock())
+    client = module.ElasticsearchUtils("localhost", 9200, "http", "", "")
+    record = {
+        "attributes": {
+            "DATA": [
+                {"header": {"name": ""}, "data": {"data_runs": []}},
+                {"header": {"name": "resident"}, "data": "4142"},
+                {"header": {"name": "empty"}, "data": ""},
+                {"header": {"name": "null"}, "data": None},
+            ],
+            "IndexAllocation": [
+                {"header": {"residential_header": {"vnc_first": 0}}},
+                {"header": {"residential_header": {"vnc_last": 2**64 - 1}}},
+            ],
+            "FileName": [
+                {"data": {"name": "long.txt", "namespace": "Win32"}},
+                {"data": {"name": "LONG~1.TXT", "namespace": "DOS"}},
+            ],
+        }
+    }
+    original = deepcopy(record)
+    expected = deepcopy(record)
+    expected["attributes"]["DATA"][1]["data"] = {"resident_data": "4142"}
+    expected["attributes"]["DATA"][2]["data"] = {"resident_data": ""}
+    expected["attributes"]["IndexAllocation"][0]["header"]["residential_header"] = {
+        "vnc_first": "0x0"
+    }
+    expected["attributes"]["IndexAllocation"][1]["header"]["residential_header"] = {
+        "vnc_last": "0xffffffffffffffff"
+    }
+    captured = []
+
+    def bulk(_client, actions, **kwargs):
+        captured.extend(actions)
+        return len(captured), []
+
+    monkeypatch.setattr(module, "bulk", bulk)
+
+    assert client.bulk_indice([record], "test", "") == (1, [])
+    assert record == original
+    assert captured == [
+        {"_id": client.calc_hash(original), "_index": "test", "_source": expected}
+    ]
+    assert client.es.mock_calls == []
+
+    changed = deepcopy(original)
+    changed["attributes"]["DATA"][0]["header"]["name"] = "changed-first-stream"
+    assert client.calc_hash(changed) != captured[0]["_id"]
 
 
 def test_bulk_error_reports_cause_and_partial_success(monkeypatch):

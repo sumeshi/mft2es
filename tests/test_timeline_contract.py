@@ -214,7 +214,7 @@ def test_csv_path_keeps_commas_and_quoted_text(timeline):
     if timeline:
         assert results[0]["windows"]["mft"]["record"]["path"] == path
     else:
-        assert results[0]["attributes"]["FileName"]["data"]["path"] == path
+        assert results[0]["attributes"]["FileName"][-1]["data"]["path"] == path
 
 
 @pytest.mark.parametrize("timeline", [False, True])
