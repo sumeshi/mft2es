@@ -19,6 +19,7 @@ def test_native_multiple_attributes_preserve_instances_names_and_data(tmp_path):
 
     assert path.stat().st_size == 1024
     assert len(records) == 1 and records[0]["valid_fixup"] is True
+    assert records[0]["path"] == "Long name.txt"
     attributes = records[0]["attributes"]
     assert list(attributes) == ["FileName", "DATA"]
     assert [item["header"]["instance"] for item in attributes["FileName"]] == [1, 2]
@@ -26,6 +27,7 @@ def test_native_multiple_attributes_preserve_instances_names_and_data(tmp_path):
         (item["data"]["name"], item["data"]["namespace"])
         for item in attributes["FileName"]
     ] == [("Long name.txt", "Win32"), ("LONGNA~1.TXT", "DOS")]
+    assert all("path" not in item["data"] for item in attributes["FileName"])
     assert [
         (item["header"]["instance"], item["header"]["name"], item["data"])
         for item in attributes["DATA"]

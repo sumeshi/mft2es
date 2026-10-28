@@ -153,7 +153,7 @@ def test_native_failures_recover_records_and_report_partial_extraction(
             (
                 record["windows"]["mft"]["record"]["path"]
                 if timeline
-                else record["attributes"]["FileName"][-1]["data"]["path"]
+                else record["path"]
             )
             for record in result["records"]
         ]
@@ -221,10 +221,7 @@ def test_changing_only_the_cyclic_parent_to_root_is_successful(tmp_path):
 
     assert result["partial"] is False
     assert _numbers(result["records"]) == [0, 1, 2]
-    paths = [
-        record["attributes"]["FileName"][-1]["data"]["path"]
-        for record in result["records"]
-    ]
+    paths = [record["path"] for record in result["records"]]
     assert [path.replace("\\", "/") for path in paths] == [
         "2.txt/1.txt/0.txt",
         "2.txt/1.txt",
@@ -250,10 +247,7 @@ def test_long_parent_chain_checks_for_cycles_before_native_recursion(tmp_path, c
 
     assert result["partial"] is cyclic
     assert _numbers(result["records"]) == [0, *range(first, last + 1)]
-    paths = [
-        record["attributes"]["FileName"][-1]["data"]["path"]
-        for record in result["records"]
-    ]
+    paths = [record["path"] for record in result["records"]]
     if cyclic:
         assert any(error["stage"] == "path" for error in result["diagnostics"])
         assert "[Unknown]" in paths[0]
@@ -312,10 +306,7 @@ def test_filename_self_reference_and_base_self_reference_have_distinct_behavior(
     if base_reference:
         assert result["diagnostics"][0]["stage"] == "path"
     else:
-        assert (
-            "[Orphaned]"
-            in result["records"][1]["attributes"]["FileName"][-1]["data"]["path"]
-        )
+        assert "[Orphaned]" in result["records"][1]["path"]
     assert source.read_bytes() == payload
 
 

@@ -248,10 +248,7 @@ def format_standard_record(
         attributes.setdefault(attr_type, []).append(attribute)
     record["attributes"] = attributes
 
-    if "FileName" in attributes:
-        # CSV supplies one path per record. Keep its existing association with
-        # the last FileName rather than assigning it to every name or parent.
-        attributes["FileName"][-1]["data"]["path"] = filepath
+    record["path"] = filepath
 
     for attr_type in ("DATA", "BITMAP"):
         for attribute in attributes.get(attr_type, []):

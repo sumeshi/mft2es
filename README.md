@@ -188,6 +188,10 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
 ### Standard Mode
 
 Attributes are grouped by type in arrays, including singletons.
+The top-level `path` is the representative path resolved by the parser; each
+FileName attribute retains its own name and parent reference.
+Update readers and Elasticsearch queries from `attributes.FileName.data.path`
+to `path` (`path.keyword` for exact matches with the default mapping).
 
 ```json
 [
@@ -215,6 +219,7 @@ Attributes are grouped by type in arrays, including singletons.
       "first_attribute_id": 6,
       "record_number": 0
     },
+    "path": "$MFT",
     "attributes": {
       "StandardInformation": [{
         "header": {
@@ -274,8 +279,7 @@ Attributes are grouped by type in arrays, including singletons.
           "reparse_value": 0,
           "name_length": 4,
           "namespace": "Win32AndDos",
-          "name": "$MFT",
-          "path": "$MFT"
+          "name": "$MFT"
         }
       }],
       "DATA": [{

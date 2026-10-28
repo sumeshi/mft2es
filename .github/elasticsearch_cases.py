@@ -52,6 +52,7 @@ def run_extra_cases(client, transport, new_index, stored_documents, document_id)
         source = artifact["create_multi_attribute_artifact"](Path(directory))
         native = mft2json(str(source), timeline_mode=False, multiprocess=False)
     assert len(native) == 1 and native[0]["valid_fixup"] is True
+    assert native[0]["path"] == "Long name.txt"
     attributes = native[0]["attributes"]
     assert [
         attribute["header"]["instance"] for attribute in attributes["FileName"]
@@ -60,6 +61,7 @@ def run_extra_cases(client, transport, new_index, stored_documents, document_id)
         "Long name.txt",
         "LONGNA~1.TXT",
     ]
+    assert all("path" not in attribute["data"] for attribute in attributes["FileName"])
     assert [
         (attribute["header"]["name"], attribute["data"])
         for attribute in attributes["DATA"]
@@ -72,6 +74,7 @@ def run_extra_cases(client, transport, new_index, stored_documents, document_id)
         document_id(record): expected_source(record) for record in original_native
     }
     for field, values in (
+        ("path.keyword", ("Long name.txt",)),
         ("attributes.FileName.data.name.keyword", ("Long name.txt", "LONGNA~1.TXT")),
         ("attributes.DATA.header.name.keyword", ("", "metadata")),
         ("attributes.DATA.data.resident_data.keyword", ("4142", "4344")),

@@ -10,7 +10,7 @@ from mft2es.views.Mft2esView import entry_point as m2e
 from mft2es.views.Mft2jsonView import entry_point as m2j
 
 # Fixed sample, mft 0.7.0: all Standard attributes and unchanged Timeline fields.
-STANDARD_DIGEST = "56b83066f4de80b9ee4415d094b5e229a554e48d1636f92f04f338ca32518a65"
+STANDARD_DIGEST = "4c79d805ae5d97d3613922b28c84e73fa8ce1f740fff3845eb6ee0573ea3b363"
 TIMELINE_DIGEST = "489ce05ab060b3f20822fb57176a13fe6093dce975f87bc1a5f902d840637d75"
 
 
@@ -27,12 +27,7 @@ def canonical_digest(records: list[dict], *, timeline: bool = False) -> str:
             entry = record["windows"]["mft"]["record"]
             entry["path"] = entry["path"].replace("\\", "/")
         else:
-            filenames = record["attributes"].get("FileName", [])
-            if filenames:
-                # The native CSV resolves one path per record. It is attached
-                # only to the last FileName, matching the previous selection.
-                filename = filenames[-1]
-                filename["data"]["path"] = filename["data"]["path"].replace("\\", "/")
+            record["path"] = record["path"].replace("\\", "/")
         checksum.update(
             json.dumps(
                 record, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -87,7 +82,10 @@ def timeline_digest_example() -> dict:
 
 
 def test_native_sample_digest_keeps_record_order():
-    records = [{"attributes": {}, "number": number} for number in (1, 2)]
+    records = [
+        {"attributes": {}, "path": "sample.txt", "number": number}
+        for number in (1, 2)
+    ]
     assert canonical_digest(records) != canonical_digest(list(reversed(records)))
 
 

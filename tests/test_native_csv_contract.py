@@ -158,9 +158,7 @@ def test_native_pairing_survives_one_record_chunks(
     else:
         assert len(records) == 2
         assert [record["header"]["record_number"] for record in records] == [0, 1]
-        assert [
-            record["attributes"]["FileName"][-1]["data"]["path"] for record in records
-        ] == expected_paths
+        assert [record["path"] for record in records] == expected_paths
     assert all(path.endswith(name) for path, name in zip(expected_paths, names))
 
 
@@ -239,12 +237,8 @@ def test_native_error_elements_recover_both_neighbors(
         assert all(p.endswith("last.txt") for p in paths[4:])
     else:
         assert [r["header"]["record_number"] for r in records] == [0, 2]
-        assert records[0]["attributes"]["FileName"][-1]["data"]["path"].endswith(
-            "first.txt"
-        )
-        assert records[1]["attributes"]["FileName"][-1]["data"]["path"].endswith(
-            "last.txt"
-        )
+        assert records[0]["path"].endswith("first.txt")
+        assert records[1]["path"].endswith("last.txt")
     assert len(parser.diagnostics) == 1
     diagnostic = parser.diagnostics[0]
     assert diagnostic["source_file"] == str(damaged_mft)

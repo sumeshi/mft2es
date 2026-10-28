@@ -68,7 +68,7 @@ def test_failed_pair_does_not_discard_neighbors_or_shift_filenames(
     else:
         output = process_standard_by_chunk(records, rows, ["case"], diagnostics, 100)
         assert [r["header"]["record_number"] for r in output] == [0, 2]
-        assert [r["attributes"]["FileName"][-1]["data"]["path"] for r in output] == [
+        assert [r["path"] for r in output] == [
             "file-0.txt",
             "file-2.txt",
         ]

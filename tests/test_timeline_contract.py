@@ -159,7 +159,12 @@ def test_standard_mode_keeps_record_shape_and_normalizes_tags():
 
     result = format_standard_record(record, "sample.txt", "mft,host01,mft")
 
-    assert result == {"header": {}, "attributes": {}, "tags": ["mft", "host01"]}
+    assert result == {
+        "header": {},
+        "attributes": {},
+        "path": "sample.txt",
+        "tags": ["mft", "host01"],
+    }
 
 
 def test_timeline_json_string_tags_use_common_parser():
@@ -214,7 +219,7 @@ def test_csv_path_keeps_commas_and_quoted_text(timeline):
     if timeline:
         assert results[0]["windows"]["mft"]["record"]["path"] == path
     else:
-        assert results[0]["attributes"]["FileName"][-1]["data"]["path"] == path
+        assert results[0]["path"] == path
 
 
 @pytest.mark.parametrize("timeline", [False, True])

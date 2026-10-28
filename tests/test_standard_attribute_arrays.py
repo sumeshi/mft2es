@@ -28,8 +28,6 @@ def test_every_attribute_type_is_always_an_array(kind, count):
         for index in range(count)
     ]
     expected = deepcopy(original)
-    if kind == "FileName":
-        expected[-1]["data"]["path"] = "resolved.txt"
     record = {
         "header": {"record_number": 42},
         "valid_fixup": False,
@@ -42,6 +40,7 @@ def test_every_attribute_type_is_always_an_array(kind, count):
         "header": {"record_number": 42},
         "valid_fixup": False,
         "attributes": {kind: expected},
+        "path": "resolved.txt",
         "tags": ["mft", "case"],
     }
     assert all(
@@ -73,12 +72,13 @@ def test_interleaved_attributes_keep_per_type_order_and_duplicates():
     } == {"FileName": [3, 2, 1], "DATA": [5, 5], "IndexRoot": [7]}
     assert groups["DATA"][0] == groups["DATA"][1]
     assert groups["DATA"][0] is not groups["DATA"][1]
-    assert [a["data"] for a in groups["FileName"]] == [{}, {}, {"path": "resolved.txt"}]
+    assert [a["data"] for a in groups["FileName"]] == [{}, {}, {}]
 
 
 def test_empty_attributes_remain_an_empty_object():
     assert format_standard_record({"attributes": []}, "unused") == {
         "attributes": {},
+        "path": "unused",
         "tags": ["mft"],
     }
 
