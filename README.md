@@ -187,6 +187,12 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
 
 ### Standard Mode
 
+Attributes are grouped by type in arrays, including singletons.
+The top-level `path` is the representative path resolved by the parser; each
+FileName attribute retains its own name and parent reference.
+Update readers and Elasticsearch queries from `attributes.FileName.data.path`
+to `path` (`path.keyword` for exact matches with the default mapping).
+
 ```json
 [
   {
@@ -213,8 +219,9 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
       "first_attribute_id": 6,
       "record_number": 0
     },
+    "path": "$MFT",
     "attributes": {
-      "StandardInformation": {
+      "StandardInformation": [{
         "header": {
           "type_code": "StandardInformation",
           "record_length": 96,
@@ -242,8 +249,8 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "quota": 0,
           "usn": 0
         }
-      },
-      "FileName": {
+      }],
+      "FileName": [{
         "header": {
           "type_code": "FileName",
           "record_length": 104,
@@ -272,11 +279,10 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "reparse_value": 0,
           "name_length": 4,
           "namespace": "Win32AndDos",
-          "name": "$MFT",
-          "path": "$MFT"
+          "name": "$MFT"
         }
-      },
-      "DATA": {
+      }],
+      "DATA": [{
         "header": {
           "type_code": "DATA",
           "record_length": 72,
@@ -297,8 +303,8 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "name": ""
         },
         "data": null
-      },
-      "BITMAP": {
+      }],
+      "BITMAP": [{
         "header": {
           "type_code": "BITMAP",
           "record_length": 80,
@@ -319,7 +325,7 @@ $ mft2es '/path/to/your/$MFT' --timeline --index=mft-timeline
           "name": ""
         },
         "data": null
-      }
+      }]
     },
     "tags": ["mft", "WORKSTATION-1", "DOMAIN-ABC"]
   },
