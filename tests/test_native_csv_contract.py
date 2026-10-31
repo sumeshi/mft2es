@@ -4,6 +4,7 @@ import csv
 import gc
 import io
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -348,3 +349,179 @@ def test_native_no_recovered_documents_preserves_existing_output(
     assert "Partial extraction" in result.stderr
     assert output.read_bytes() == b"previous output"
     assert not list(output.parent.glob(f".{output.name}.*.tmp"))
+
+
+@pytest.mark.parametrize("timeline", [False, True])
+@pytest.mark.parametrize("chunk_size", [1, 8])
+@pytest.mark.parametrize("multiprocess", [False, True])
+@pytest.mark.parametrize("tail_size", [1, 512, 1023])
+def test_native_truncated_tail_is_one_partial_diagnostic(
+    tmp_path, timeline, chunk_size, multiprocess, tail_size
+):
+    source = tmp_path / "truncated.mft"
+    source.write_bytes(
+        synthetic_file_record(0, "first.txt")
+        + synthetic_file_record(1, "second.txt")[:tail_size]
+    )
+    model = Mft2es(source)
+    try:
+        chunks = list(
+            model.gen_timeline_records(multiprocess, chunk_size, timeline_mode=timeline)
+        )
+        records = [record for chunk in chunks for record in chunk]
+        assert len(records) == (4 if timeline else 1)
+        assert len(model.diagnostics) == 1
+        diagnostic = model.diagnostics[0]
+        assert diagnostic["record_index"] == 1
+        assert diagnostic["stage"] == "parse"
+        assert "byte offset 1024" in diagnostic["error"]
+        assert f"{tail_size} bytes" in diagnostic["error"]
+    finally:
+        model.close()
+
+
+def test_native_truncated_only_record_is_partial_without_forcing_parse(tmp_path):
+    source = tmp_path / "short.mft"
+    source.write_bytes(synthetic_file_record(0, "first.txt")[:512])
+    model = Mft2es(source)
+    try:
+        assert list(model.gen_timeline_records(False, 1)) == []
+        assert len(model.diagnostics) == 1
+        assert "byte offset 0" in model.diagnostics[0]["error"]
+        assert "512 bytes" in model.diagnostics[0]["error"]
+    finally:
+        model.close()
+
+
+def test_native_valid_control_has_no_trailing_diagnostic(tmp_path):
+    source = tmp_path / "complete.mft"
+    source.write_bytes(synthetic_file_record(0, "first.txt"))
+    model = Mft2es(source)
+    try:
+        assert len(list(model.gen_timeline_records(False, 1))) == 1
+        assert model.diagnostics == []
+    finally:
+        model.close()
+
+
+@pytest.mark.parametrize("timeline", [False, True])
+@pytest.mark.parametrize("output_format", ["json", "jsonl"])
+def test_native_truncated_tail_cli_publishes_partial_and_exits_one(
+    tmp_path, timeline, output_format
+):
+    source = tmp_path / "truncated.mft"
+    payload = (
+        synthetic_file_record(0, "first.txt")
+        + synthetic_file_record(1, "second.txt")[:512]
+    )
+    source.write_bytes(payload)
+    output = tmp_path / f"output.{output_format}"
+    output.write_bytes(b"prior output")
+    command = [
+        sys.executable,
+        "-m",
+        "mft2es.views.Mft2jsonView",
+        str(source),
+        "--quiet",
+        "--format",
+        output_format,
+        "-o",
+        str(output),
+    ]
+    if not timeline:
+        command.append("--no-timeline")
+    result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 1, result.stderr
+    assert "Partial extraction" in result.stderr
+    assert output.read_bytes() != b"prior output"
+    records = (
+        json.loads(output.read_bytes())
+        if output_format == "json"
+        else [json.loads(line) for line in output.read_bytes().splitlines()]
+    )
+    assert len(records) == (4 if timeline else 1)
+    assert payload == source.read_bytes()
+    assert not list(tmp_path.glob(f".{output.name}.*.tmp"))
+
+
+@pytest.mark.parametrize("multiprocess", [False, True])
+def test_native_non_utf8_path_is_json_safe_and_byte_identified(tmp_path, multiprocess):
+    if os.name != "posix":
+        pytest.skip("POSIX byte filenames are required")
+    raw_directory = os.fsencode(tmp_path) + b"/input-\xff"
+    os.mkdir(raw_directory)
+    source = Path(os.fsdecode(raw_directory)) / "MFT"
+    payload = synthetic_file_record(0, "first.txt")
+    source.write_bytes(payload)
+    records = mft2json(str(source), multiprocess=multiprocess)
+    assert records
+    assert all("\\udcff" in record["log"]["file"]["path"] for record in records)
+    assert all(
+        record["windows"]["mft"]["source"]["file_path_bytes_hex"]
+        == os.fsencode(str(source.resolve())).hex()
+        for record in records
+    )
+    import orjson
+
+    assert all(orjson.dumps(record) for record in records)
+    assert source.read_bytes() == payload
+    standard_records = mft2json(
+        str(source), timeline_mode=False, multiprocess=multiprocess
+    )
+    assert standard_records
+    assert all("source" not in record for record in standard_records)
+    literal = tmp_path / "input-\\udcff" / "MFT"
+    literal.parent.mkdir()
+    literal.write_bytes(payload)
+    literal_records = mft2json(str(literal))
+    assert (
+        records[0]["log"]["file"]["path"] == literal_records[0]["log"]["file"]["path"]
+    )
+    from mft2es.models.ElasticsearchUtils import ElasticsearchUtils
+
+    assert ElasticsearchUtils.calc_hash(
+        object.__new__(ElasticsearchUtils), records[0]
+    ) != (
+        ElasticsearchUtils.calc_hash(
+            object.__new__(ElasticsearchUtils), literal_records[0]
+        )
+    )
+
+
+@pytest.mark.parametrize("output_format", ["json", "jsonl"])
+def test_native_non_utf8_path_cli_commits_json(output_format, tmp_path):
+    if os.name != "posix":
+        pytest.skip("POSIX byte filenames are required")
+    raw_directory = os.fsencode(tmp_path) + b"/cli-\xff"
+    os.mkdir(raw_directory)
+    source = Path(os.fsdecode(raw_directory)) / "MFT"
+    payload = synthetic_file_record(0, "first.txt")
+    source.write_bytes(payload)
+    output = tmp_path / f"output.{output_format}"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mft2es.views.Mft2jsonView",
+            str(source),
+            "--quiet",
+            "--format",
+            output_format,
+            "-o",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        errors="backslashreplace",
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Partial extraction" not in result.stderr
+    records = (
+        json.loads(output.read_bytes())
+        if output_format == "json"
+        else [json.loads(line) for line in output.read_bytes().splitlines()]
+    )
+    assert records
+    assert all("\\udcff" in record["log"]["file"]["path"] for record in records)
+    assert source.read_bytes() == payload

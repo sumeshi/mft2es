@@ -1,8 +1,10 @@
 """MFT evidence and ES-only DATA/VCN representation on a real ES service."""
 
 from copy import deepcopy
+import os
 from pathlib import Path
 import runpy
+import shutil
 from tempfile import TemporaryDirectory
 
 
@@ -86,6 +88,74 @@ def run_extra_cases(client, transport, new_index, stored_documents, document_id)
                 ]
                 == 1
             )
+
+    if os.name == "posix":
+        from mft2es import PartialExtractionError
+
+        with TemporaryDirectory() as path_directory:
+            path_directory = Path(path_directory)
+            path_source = artifact["create_multi_attribute_artifact"](path_directory)
+            # Byte-decoded and literal backslash paths share a display value.
+            # Retained source bytes keep their document IDs distinct in ES.
+            raw_directory = os.fsencode(path_directory) + b"/source-\xff"
+            os.mkdir(raw_directory)
+            raw_path = Path(os.fsdecode(raw_directory)) / "MFT"
+            shutil.copyfile(path_source, raw_path)
+            literal_path = path_directory / "source-\\udcff" / "MFT"
+            literal_path.parent.mkdir()
+            shutil.copyfile(path_source, literal_path)
+            raw_documents = mft2json(
+                str(raw_path), timeline_mode=True, multiprocess=False
+            )
+            literal_documents = mft2json(
+                str(literal_path), timeline_mode=True, multiprocess=False
+            )
+            assert raw_documents and literal_documents
+            assert (
+                raw_documents[0]["log"]["file"]["path"]
+                == literal_documents[0]["log"]["file"]["path"]
+            )
+            expected_bytes = os.fsencode(str(raw_path.resolve())).hex()
+            assert all(
+                document["windows"]["mft"]["source"]["file_path_bytes_hex"]
+                == expected_bytes
+                for document in raw_documents
+            )
+            assert all(
+                "source" not in document["windows"]["mft"]
+                for document in literal_documents
+            )
+            path_index = new_index("path-bytes")
+            path_documents = [*raw_documents, *literal_documents]
+            assert transport.bulk_indice(path_documents, path_index) == (
+                len(path_documents),
+                [],
+            )
+            ids = [document_id(document) for document in path_documents]
+            assert len(set(ids)) == len(ids)
+            assert set(stored_documents(client, path_index)) == set(ids)
+
+            truncated_path = path_directory / "truncated.mft"
+            truncated_payload = (
+                path_source.read_bytes() + path_source.read_bytes()[:512]
+            )
+            truncated_path.write_bytes(truncated_payload)
+            try:
+                mft2json(str(truncated_path), timeline_mode=True, multiprocess=False)
+            except PartialExtractionError as error:
+                partial_records = error.records
+                assert len(error.diagnostics) == 1
+                assert "byte offset" in error.diagnostics[0]["error"]
+            else:
+                raise AssertionError("truncated MFT tail was not reported")
+            truncated_index = new_index("truncated-tail")
+            assert transport.bulk_indice(partial_records, truncated_index) == (
+                len(partial_records),
+                [],
+            )
+            assert set(stored_documents(client, truncated_index)) == {
+                document_id(document) for document in partial_records
+            }
 
     standard = [
         {

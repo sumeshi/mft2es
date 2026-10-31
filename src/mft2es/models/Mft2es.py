@@ -3,6 +3,7 @@ import ntpath
 import csv
 import io
 import logging
+import os
 from pathlib import Path
 from typing import Generator, Iterable, List, Optional, Sequence, Union
 from itertools import islice, zip_longest
@@ -292,6 +293,11 @@ def _process_chunk(
     if len(records) != len(rows):
         raise RuntimeError("MFT JSON and CSV chunk lengths do not match")
     parsed_tags = parse_tags(tags)
+    display_path, path_bytes_hex = (
+        _display_filesystem_path(mft_file_path)
+        if timeline_mode
+        else (mft_file_path, None)
+    )
     output = []
     # Native iterators can yield Exception objects. Never filter either stream
     # independently: the paired item must be discarded from both streams.
@@ -331,8 +337,13 @@ def _process_chunk(
             if timeline_mode:
                 # Build all MACB records before publishing any from this record.
                 converted = format_timeline_records(
-                    record, filename, mft_file_path, parsed_tags
+                    record, filename, display_path, parsed_tags
                 )
+                if path_bytes_hex is not None:
+                    for timeline_record in converted:
+                        timeline_record["windows"]["mft"]["source"] = {
+                            "file_path_bytes_hex": path_bytes_hex
+                        }
             else:
                 converted = [format_standard_record(record, filename, parsed_tags)]
         except Exception as error:
@@ -379,6 +390,7 @@ def _mp_worker(args):
 class Mft2es(SafeMultiprocessingMixin):
     def __init__(self, input_path: Path) -> None:
         self.path = Path(input_path).resolve()
+        self._display_path, _ = _display_filesystem_path(str(self.path))
         self.diagnostics = []
         self._file_handle_json = None
         self._file_handle_csv = None
@@ -414,11 +426,11 @@ class Mft2es(SafeMultiprocessingMixin):
     def _collect_result(self, result):
         records, diagnostics = result
         for diagnostic in diagnostics:
-            diagnostic = {"source_file": str(self.path), **diagnostic}
+            diagnostic = {"source_file": self._display_path, **diagnostic}
             self.diagnostics.append(diagnostic)
             logger.warning(
                 "Could not fully extract MFT record from %s at iterator index %d (%s): %s",
-                self.path,
+                self._display_path,
                 diagnostic["record_index"],
                 diagnostic["stage"],
                 diagnostic["error"],
@@ -474,3 +486,44 @@ class Mft2es(SafeMultiprocessingMixin):
         else:
             for task in tasks:
                 yield self._collect_result(_mp_worker(task))
+        self._add_truncated_tail_diagnostic()
+
+    def _add_truncated_tail_diagnostic(self):
+        reader = getattr(self, "_json_reader", None)
+        if reader is None or not reader._record_size:
+            return
+        size = os.fstat(reader._stream.fileno()).st_size
+        remainder = size % reader._record_size
+        if not remainder:
+            return
+        offset = size - remainder
+        diagnostic = {
+            "source_file": self._display_path,
+            "record_index": offset // reader._record_size,
+            "record_number": None,
+            "stage": "parse",
+            "error": (
+                f"truncated MFT tail at byte offset {offset}: {remainder} bytes "
+                f"remain; record size is {reader._record_size} bytes"
+            ),
+        }
+        self.diagnostics.append(diagnostic)
+        logger.warning(
+            "Could not fully extract MFT record from %s at iterator index %d (%s): %s",
+            self._display_path,
+            diagnostic["record_index"],
+            diagnostic["stage"],
+            diagnostic["error"],
+        )
+
+
+def _display_filesystem_path(value: str):
+    """Render an OS path for JSON and retain undecodable source bytes."""
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return (
+            value.encode("utf-8", "backslashreplace").decode("utf-8"),
+            os.fsencode(value).hex(),
+        )
+    return value, None
